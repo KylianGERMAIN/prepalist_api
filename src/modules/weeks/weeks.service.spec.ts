@@ -93,6 +93,53 @@ describe('WeeksService', () => {
     expect(slots.save).toHaveBeenCalled();
   });
 
+  it('generate reuses the previous dinner for the next-day lunch (leftovers)', async () => {
+    const weekSlots = buildEmptySlots();
+    weeks.findOne.mockResolvedValue({
+      id: 'w1',
+      userId: 'u1',
+      slots: weekSlots,
+    });
+    meals.find.mockResolvedValue([
+      { id: 'm1', isFavorite: true, rating: 5, lastCookedAt: null },
+      // chemin lastCookedAt non-null (couvre freshnessScore)
+      {
+        id: 'm2',
+        isFavorite: false,
+        rating: 2,
+        lastCookedAt: new Date('2020-01-01'),
+      },
+    ]);
+    const spy = jest.spyOn(Math, 'random').mockReturnValue(0.1); // force le report des restes
+    await service.generate('u1', 'w1');
+    spy.mockRestore();
+
+    const monDinner = weekSlots.find(
+      (s) => s.date === '2024-07-01' && s.slot === MealSlot.DINNER,
+    );
+    const tueLunch = weekSlots.find(
+      (s) => s.date === '2024-07-02' && s.slot === MealSlot.LUNCH,
+    );
+    expect(
+      Boolean(monDinner && tueLunch && tueLunch.mealId === monDinner.mealId),
+    ).toBe(true);
+  });
+
+  it('generate preserves a manually-assigned slot', async () => {
+    const weekSlots = buildEmptySlots();
+    weekSlots[0].mealId = 'pinned'; // créneau déjà assigné
+    weeks.findOne.mockResolvedValue({
+      id: 'w1',
+      userId: 'u1',
+      slots: weekSlots,
+    });
+    meals.find.mockResolvedValue([
+      { id: 'm1', isFavorite: false, rating: 3, lastCookedAt: null },
+    ]);
+    await service.generate('u1', 'w1');
+    expect(weekSlots[0].mealId).toBe('pinned');
+  });
+
   it('generate throws when the user has no meals', async () => {
     weeks.findOne.mockResolvedValue({ id: 'w1', userId: 'u1', slots: [] });
     meals.find.mockResolvedValue([]);

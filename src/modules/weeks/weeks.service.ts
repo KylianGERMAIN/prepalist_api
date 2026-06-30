@@ -75,7 +75,8 @@ export class WeeksService {
   }
 
   /**
-   * Remplit les créneaux par tirage pondéré (favori + fraîcheur − doublon).
+   * Remplit les créneaux **vides** par tirage pondéré (favori + fraîcheur −
+   * doublon) ; les créneaux déjà assignés (manuellement) sont préservés.
    * Règle meal-prep : le dîner du jour J peut alimenter le déjeuner du jour J+1.
    */
   async generate(userId: string, id: string): Promise<Week> {
@@ -88,8 +89,18 @@ export class WeeksService {
     const placed = new Map<string, number>();
     const dinnerByDate = new Map<string, string>();
     const ordered = [...week.slots].sort(this.compareSlots);
+    const changed: WeekSlot[] = [];
 
     for (const slot of ordered) {
+      // Préserve une assignation existante et la prend en compte (doublons + restes).
+      if (slot.mealId) {
+        placed.set(slot.mealId, (placed.get(slot.mealId) ?? 0) + 1);
+        if (slot.slot === MealSlot.DINNER) {
+          dinnerByDate.set(slot.date, slot.mealId);
+        }
+        continue;
+      }
+
       const prevDinner = dinnerByDate.get(addDays(slot.date, -1));
       const useLeftover =
         slot.slot === MealSlot.LUNCH &&
@@ -105,16 +116,19 @@ export class WeeksService {
       if (slot.slot === MealSlot.DINNER) {
         dinnerByDate.set(slot.date, chosen);
       }
+      changed.push(slot);
     }
 
-    // Persiste uniquement la colonne FK (sans l'objet relation `meal` chargé en
-    // eager, qui sinon écraserait le mealId lors du save).
-    await this.slots.save(
-      ordered.map((s) => ({
-        id: s.id,
-        mealId: s.mealId,
-      })) as DeepPartial<WeekSlot>[],
-    );
+    // Persiste uniquement la colonne FK des créneaux modifiés (sans l'objet
+    // relation `meal` chargé en eager, qui sinon écraserait le mealId au save).
+    if (changed.length > 0) {
+      await this.slots.save(
+        changed.map((s) => ({
+          id: s.id,
+          mealId: s.mealId,
+        })) as DeepPartial<WeekSlot>[],
+      );
+    }
     return this.findOne(userId, id);
   }
 
@@ -167,7 +181,8 @@ export class WeeksService {
     let r = Math.random() * total;
     for (let i = 0; i < meals.length; i++) {
       r -= weights[i];
-      if (r <= 0) {
+      // `< 0` (et non `<= 0`) pour qu'un poids nul ne capture jamais le tirage.
+      if (r < 0) {
         return meals[i].id;
       }
     }
@@ -187,7 +202,8 @@ export class WeeksService {
     if (!lastCookedAt) {
       return 2; // jamais cuisinée -> priorité max
     }
-    const days = (Date.now() - lastCookedAt.getTime()) / MS_PER_DAY;
+    // `new Date(...)` défensif : le driver peut livrer une string sur timestamptz.
+    const days = (Date.now() - new Date(lastCookedAt).getTime()) / MS_PER_DAY;
     return Math.min(days / FRESHNESS_CAP_DAYS, 1) * 2;
   }
 }
