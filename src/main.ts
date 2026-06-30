@@ -11,6 +11,17 @@ async function bootstrap() {
 
   app.use(helmet());
   app.use(requestId);
+
+  // CORS : origins via CORS_ORIGINS (liste séparée par des virgules).
+  // Vide -> reflète l'origin (tous), acceptable en local ; à restreindre en prod.
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  app.enableCors({
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true,
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
