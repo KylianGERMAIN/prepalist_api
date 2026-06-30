@@ -8,6 +8,8 @@ describe('MealsService', () => {
     save: jest.Mock;
     findOne: jest.Mock;
     remove: jest.Mock;
+    update: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let mealIngredients: { create: jest.Mock };
   let ingredients: { find: jest.Mock };
@@ -18,6 +20,8 @@ describe('MealsService', () => {
       save: jest.fn((x: object) => Promise.resolve({ id: 'm1', ...x })),
       findOne: jest.fn(),
       remove: jest.fn(() => Promise.resolve()),
+      update: jest.fn(() => Promise.resolve()),
+      createQueryBuilder: jest.fn(),
     };
     mealIngredients = { create: jest.fn((x: unknown) => x) };
     ingredients = { find: jest.fn() };
@@ -68,21 +72,84 @@ describe('MealsService', () => {
     );
   });
 
-  it('markCooked increments the counter and dates the meal', async () => {
-    meals.findOne.mockResolvedValue({
-      id: 'm1',
-      userId: 'u1',
-      timesCooked: 2,
-      lastCookedAt: null,
-    });
-    const res = await service.markCooked('u1', 'm1');
-    expect(res.timesCooked).toBe(3);
-    expect(res.lastCookedAt).toBeInstanceOf(Date);
+  it('markCooked applies an atomic increment and dates the meal', async () => {
+    meals.findOne.mockResolvedValue({ id: 'm1', userId: 'u1' });
+    await service.markCooked('u1', 'm1');
+    expect(meals.update).toHaveBeenCalledWith(
+      'm1',
+      expect.objectContaining({ lastCookedAt: expect.any(Date) }),
+    );
   });
 
   it('remove deletes an owned meal', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1', userId: 'u1' });
     await service.remove('u1', 'm1');
     expect(meals.remove).toHaveBeenCalled();
+  });
+
+  it('update replaces ingredients when the list is provided', async () => {
+    meals.findOne.mockResolvedValue({
+      id: 'm1',
+      userId: 'u1',
+      name: 'old',
+      ingredients: [{ id: 'old' }],
+    });
+    ingredients.find.mockResolvedValue([{ id: 'i1' }]);
+    await service.update('u1', 'm1', {
+      name: 'new',
+      ingredients: [{ ingredientId: 'i1', quantity: 1, unit: 'g' }],
+    });
+    const saved = meals.save.mock.calls[0][0];
+    expect(saved.name).toBe('new');
+    expect(saved.ingredients).toHaveLength(1);
+  });
+
+  it('update leaves ingredients untouched when omitted', async () => {
+    meals.findOne.mockResolvedValue({
+      id: 'm1',
+      userId: 'u1',
+      ingredients: [{ id: 'old' }],
+    });
+    await service.update('u1', 'm1', { rating: 4 });
+    const saved = meals.save.mock.calls[0][0];
+    expect(saved.ingredients).toEqual([{ id: 'old' }]);
+    expect(saved.rating).toBe(4);
+  });
+
+  it('update rejects a duplicated ingredient', async () => {
+    meals.findOne.mockResolvedValue({
+      id: 'm1',
+      userId: 'u1',
+      ingredients: [],
+    });
+    await expect(
+      service.update('u1', 'm1', {
+        ingredients: [
+          { ingredientId: 'i1', quantity: 1, unit: 'g' },
+          { ingredientId: 'i1', quantity: 2, unit: 'g' },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('findAll applies one filter per provided query param', async () => {
+    const qb = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    meals.createQueryBuilder.mockReturnValue(qb);
+    await service.findAll('u1', {
+      page: 1,
+      limit: 20,
+      skip: 0,
+      favorite: true,
+      name: 'x',
+      tag: 't',
+    } as never);
+    expect(qb.andWhere).toHaveBeenCalledTimes(3);
   });
 });

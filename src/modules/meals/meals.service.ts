@@ -95,12 +95,16 @@ export class MealsService {
     await this.meals.remove(meal);
   }
 
-  /** Marque un repas comme cuisiné : incrémente le compteur et date la dernière fois. */
+  /** Marque un repas comme cuisiné : incrément atomique + date la dernière fois. */
   async markCooked(userId: string, id: string): Promise<Meal> {
-    const meal = await this.findOne(userId, id);
-    meal.timesCooked += 1;
-    meal.lastCookedAt = new Date();
-    return this.meals.save(meal);
+    await this.findOne(userId, id); // garde d'ownership + 404
+    // Incrément en SQL pour éviter la perte de mise à jour (lost update) et le
+    // rechargement inutile du graphe d'ingrédients par save().
+    await this.meals.update(id, {
+      timesCooked: () => '"times_cooked" + 1',
+      lastCookedAt: new Date(),
+    });
+    return this.findOne(userId, id);
   }
 
   /** Construit les lignes d'ingrédients en validant que tous existent. */
@@ -110,9 +114,15 @@ export class MealsService {
     if (items.length === 0) {
       return [];
     }
-    const ids = [...new Set(items.map((i) => i.ingredientId))];
-    const found = await this.ingredients.find({ where: { id: In(ids) } });
-    if (found.length !== ids.length) {
+    const ids = items.map((i) => i.ingredientId);
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length !== ids.length) {
+      throw new BadRequestException(
+        'Un même ingrédient est présent en double dans le repas',
+      );
+    }
+    const found = await this.ingredients.find({ where: { id: In(uniqueIds) } });
+    if (found.length !== uniqueIds.length) {
       throw new BadRequestException(
         'Un ou plusieurs ingrédients sont introuvables',
       );
