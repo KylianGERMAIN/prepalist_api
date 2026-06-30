@@ -9,6 +9,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
+import { IngredientsModule } from './modules/ingredients/ingredients.module';
+import { MealsModule } from './modules/meals/meals.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -29,6 +31,8 @@ import { UsersModule } from './modules/users/users.module';
     HealthModule,
     UsersModule,
     AuthModule,
+    IngredientsModule,
+    MealsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -31,6 +31,9 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
 
 ## État
 
-Phase 0 — socle : config, health, users, auth (register / login / refresh JWT).
-Phases suivantes (meals, weeks, shopping-list, ai, notifications) cf.
-`instruction.md` §9.
+- **Phase 0** — socle : config, health, users, auth (register / login / refresh JWT), CI.
+- **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
+  CRUD `meals` (scopé user, filtres favorite/tag/name, `POST /:id/cooked`),
+  catalogue `ingredients` (recherche ILike).
+
+Phases suivantes (weeks, shopping-list, ai, notifications) cf. `instruction.md` §9.
