@@ -13,9 +13,14 @@ export class UsersService {
     @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
+  /** Normalise un email pour comparaison/stockage insensible à la casse. */
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   /** Recherche un utilisateur par email (null si absent). */
   findByEmail(email: string): Promise<User | null> {
-    return this.users.findOne({ where: { email } });
+    return this.users.findOne({ where: { email: this.normalizeEmail(email) } });
   }
 
   /** Récupère un utilisateur par id ou lève NotFoundException. */
@@ -33,11 +38,12 @@ export class UsersService {
     passwordHash: string,
     role: UserRole = UserRole.USER,
   ): Promise<User> {
-    const exists = await this.users.findOne({ where: { email } });
+    const normalized = this.normalizeEmail(email);
+    const exists = await this.users.findOne({ where: { email: normalized } });
     if (exists) {
       throw new ConflictException('Un compte existe déjà avec cet email');
     }
-    const user = this.users.create({ email, passwordHash, role });
+    const user = this.users.create({ email: normalized, passwordHash, role });
     return this.users.save(user);
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { TokenPair, TokenService } from '../token/token.service';
+import { User } from '../users/entities/user.entity';
+import { JwtPayload, TokenPair, TokenService } from '../token/token.service';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -32,13 +33,19 @@ export class AuthService {
 
   /** Renouvelle la paire de tokens à partir d'un refresh token valide. */
   async refresh(refreshToken: string): Promise<TokenPair> {
-    let payload;
+    let payload: JwtPayload;
     try {
       payload = await this.tokens.verifyRefresh(refreshToken);
     } catch {
       throw new UnauthorizedException('Refresh token invalide ou expiré');
     }
-    const user = await this.users.findById(payload.sub);
+    // Token valide mais utilisateur disparu : 401, pas 404.
+    let user: User;
+    try {
+      user = await this.users.findById(payload.sub);
+    } catch {
+      throw new UnauthorizedException('Refresh token invalide ou expiré');
+    }
     return this.tokens.issueTokens(user);
   }
 }
