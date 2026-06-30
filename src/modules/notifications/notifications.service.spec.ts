@@ -27,12 +27,16 @@ describe('NotificationsService', () => {
     expect(await service.sendWeeklyReminders()).toBe(0);
   });
 
-  it('targets the upcoming Monday', async () => {
+  it('targets the next Monday (clock frozen on a Sunday)', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2024-07-07T18:00:00Z')); // dimanche
     users.find.mockResolvedValue([]);
     weeks.find.mockResolvedValue([]);
-    await service.sendWeeklyReminders();
-    const where = weeks.find.mock.calls[0][0].where;
-    // startDate doit être un lundi (YYYY-MM-DD) dans le futur
-    expect(new Date(`${where.startDate}T00:00:00Z`).getUTCDay()).toBe(1);
+    try {
+      await service.sendWeeklyReminders();
+    } finally {
+      jest.useRealTimers();
+    }
+    // dimanche 2024-07-07 -> lundi suivant 2024-07-08
+    expect(weeks.find.mock.calls[0][0].where.startDate).toBe('2024-07-08');
   });
 });

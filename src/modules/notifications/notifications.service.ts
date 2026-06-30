@@ -16,8 +16,8 @@ export class NotificationsService {
   ) {}
 
   /**
-   * Rappel hebdo (dimanche 18h) : prévient les utilisateurs qui n'ont pas encore
-   * planifié la semaine à venir. Renvoie le nombre de rappels envoyés.
+   * Rappel hebdo (dimanche 18h) : cible les utilisateurs qui n'ont pas encore
+   * planifié la semaine à venir. Renvoie le nombre d'utilisateurs ciblés.
    */
   @Cron('0 18 * * 0')
   async sendWeeklyReminders(): Promise<number> {
@@ -31,8 +31,8 @@ export class NotificationsService {
 
     for (const user of toRemind) {
       // ponytail: livraison par log (seam). Brancher email/push ici une fois le
-      // canal de notification choisi.
-      this.logger.log(`Rappel hebdo -> ${user.email} : planifie ta semaine`);
+      // canal choisi. On logge l'id (pas l'email) pour ne pas écrire de PII.
+      this.logger.log(`Rappel hebdo -> user ${user.id} : planifie ta semaine`);
     }
     return toRemind.length;
   }
