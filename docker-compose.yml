@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: prepalist-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: prepalist
+      POSTGRES_PASSWORD: prepalist
+      POSTGRES_DB: prepalist
+    ports:
+      - '5432:5432'
+    volumes:
+      - prepalist-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U prepalist -d prepalist']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  prepalist-pgdata:
