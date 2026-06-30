@@ -6,9 +6,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * peuvent plus coexister, même en cas de course (le check applicatif ILike ne
  * couvre pas la concurrence).
  */
-export class IngredientNameCaseInsensitive1719801000000
-  implements MigrationInterface
-{
+export class IngredientNameCaseInsensitive1719801000000 implements MigrationInterface {
   name = 'IngredientNameCaseInsensitive1719801000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
