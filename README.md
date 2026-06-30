@@ -35,5 +35,8 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
 - **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
   CRUD `meals` (scopé user, filtres favorite/tag/name, `POST /:id/cooked`),
   catalogue `ingredients` (recherche ILike).
+- **Phase 2** — semaine : `Week` / `WeekSlot`, `POST /weeks` (14 créneaux),
+  `GET /weeks/current`, `POST /weeks/:id/generate` (génération pondérée
+  favori/fraîcheur + règle des restes), `PATCH /weeks/:id/slots/:slotId`.
 
-Phases suivantes (weeks, shopping-list, ai, notifications) cf. `instruction.md` §9.
+Phases suivantes (shopping-list, ai, notifications) cf. `instruction.md` §9.

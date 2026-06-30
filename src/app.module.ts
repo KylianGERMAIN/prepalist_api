@@ -12,6 +12,7 @@ import { HealthModule } from './modules/health/health.module';
 import { IngredientsModule } from './modules/ingredients/ingredients.module';
 import { MealsModule } from './modules/meals/meals.module';
 import { UsersModule } from './modules/users/users.module';
+import { WeeksModule } from './modules/weeks/weeks.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     AuthModule,
     IngredientsModule,
     MealsModule,
+    WeeksModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
