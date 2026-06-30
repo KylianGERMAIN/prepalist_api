@@ -19,6 +19,10 @@ export const dataSourceOptions: DataSourceOptions = {
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'local',
+  // Postgres managé (Neon/Supabase/RDS) impose TLS. DB_SSL=true active le chiffrement
+  // de la connexion (app + CLI migrations). rejectUnauthorized:false : on chiffre sans
+  // vérifier la chaîne (suffisant pour ces providers ; passer un CA si besoin de vérif stricte).
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 };
 
 const dataSource = new DataSource(dataSourceOptions);

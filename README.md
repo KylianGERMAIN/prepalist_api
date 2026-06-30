@@ -45,3 +45,10 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
   Livraison par log pour l'instant (canal email/push à brancher).
 
 Phase 4 (capture IA) écartée volontairement.
+
+## Déploiement
+
+Image Docker multi-stage (`Dockerfile`), CI build+push sur `ghcr.io` à chaque tag `vX.Y.Z`
+(`.github/workflows/release.yml`). Stack prod (front + api + Caddy, Postgres managé externe)
+et procédure complète : voir [`deploy/`](./deploy/README.md). Migrations prod :
+`pnpm migration:run:prod` (sur `dist/` compilé). Variables prod : cf. `deploy/.env.prod.example`.
