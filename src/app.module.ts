@@ -17,11 +17,38 @@ import { ShoppingListModule } from './modules/shopping-list/shopping-list.module
 import { UsersModule } from './modules/users/users.module';
 import { WeeksModule } from './modules/weeks/weeks.module';
 
+/**
+ * Garde fail-fast : en production, refuse de démarrer si une variable critique manque,
+ * pour ne pas tourner silencieusement sur les fallbacks de dev (DB/JWT).
+ */
+const REQUIRED_PROD_ENV = [
+  'DB_HOST',
+  'DB_PORT',
+  'DB_USERNAME',
+  'DB_PASSWORD',
+  'DB_NAME',
+  'JWT_ACCESS_SECRET',
+  'JWT_REFRESH_SECRET',
+];
+
+function validateEnv(config: Record<string, unknown>) {
+  if (config.NODE_ENV === 'production') {
+    const missing = REQUIRED_PROD_ENV.filter((key) => !config[key]);
+    if (missing.length > 0) {
+      throw new Error(
+        `Variables d'environnement manquantes en production : ${missing.join(', ')}`,
+      );
+    }
+  }
+  return config;
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
+      validate: validateEnv,
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
