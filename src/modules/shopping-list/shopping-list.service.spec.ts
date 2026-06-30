@@ -83,5 +83,21 @@ describe('ShoppingListService', () => {
     });
     const res = await service.forWeek('u1', 'w1');
     expect(res.items).toHaveLength(2);
+    expect(res.items.find((i) => i.unit === 'ml')?.quantity).toBe(200);
+    expect(res.items.find((i) => i.unit === 'cl')?.quantity).toBe(5);
+  });
+
+  it('rounds float accumulation to 2 decimals', async () => {
+    weeks.findOne.mockResolvedValue({
+      id: 'w1',
+      userId: 'u1',
+      startDate: '2024-07-01',
+      slots: [
+        { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.1)] } },
+        { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.2)] } },
+      ],
+    });
+    const res = await service.forWeek('u1', 'w1');
+    expect(res.items[0].quantity).toBe(0.3); // et non 0.30000000000000004
   });
 });

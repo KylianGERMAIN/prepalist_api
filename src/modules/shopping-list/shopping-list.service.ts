@@ -50,9 +50,16 @@ export class ShoppingListService {
       }
     }
 
-    const items = [...byKey.values()].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
+    const items = [...byKey.values()]
+      // Arrondi de sortie : l'accumulation en float64 des numeric Postgres peut
+      // produire 250.00000000000003 ; 2 décimales suffisent pour des quantités.
+      .map((item) => {
+        item.quantity = Math.round(item.quantity * 100) / 100;
+        return item;
+      })
+      .sort((a, b) =>
+        a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
+      );
     return new ShoppingListDto(week.id, week.startDate, items);
   }
 }
