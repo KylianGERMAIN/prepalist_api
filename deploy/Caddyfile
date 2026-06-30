@@ -1,0 +1,6 @@
+# Caddy : TLS automatique (Let's Encrypt) + reverse proxy vers le front.
+# DOMAIN injecté par docker-compose (variable d'env).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy front:3000
+}
