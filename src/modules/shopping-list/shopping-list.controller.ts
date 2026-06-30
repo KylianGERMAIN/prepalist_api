@@ -1,6 +1,12 @@
 import { Controller, Get, Param, ParseUUIDPipe } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { ShoppingListDto } from './dto/shopping-list.dto';
 import { ShoppingListService } from './shopping-list.service';
 
 @ApiTags('shopping-list')
@@ -11,6 +17,7 @@ export class ShoppingListController {
 
   @Get(':id/shopping-list')
   @ApiOperation({ summary: 'Liste de courses agrégée d’une semaine' })
+  @ApiOkResponse({ type: ShoppingListDto })
   forWeek(
     @CurrentUser('id') userId: string,
     @Param('id', ParseUUIDPipe) id: string,
