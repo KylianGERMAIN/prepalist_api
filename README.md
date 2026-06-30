@@ -38,5 +38,7 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
 - **Phase 2** — semaine : `Week` / `WeekSlot`, `POST /weeks` (14 créneaux),
   `GET /weeks/current`, `POST /weeks/:id/generate` (génération pondérée
   favori/fraîcheur + règle des restes), `PATCH /weeks/:id/slots/:slotId`.
+- **Phase 3** — liste de courses : `GET /weeks/:id/shopping-list`, agrégation
+  dérivée (quantité × portions, groupée par ingrédient + unité). Pas de table.
 
-Phases suivantes (shopping-list, ai, notifications) cf. `instruction.md` §9.
+Phases suivantes (ai, notifications) cf. `instruction.md` §9.

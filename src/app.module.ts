@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { IngredientsModule } from './modules/ingredients/ingredients.module';
 import { MealsModule } from './modules/meals/meals.module';
+import { ShoppingListModule } from './modules/shopping-list/shopping-list.module';
 import { UsersModule } from './modules/users/users.module';
 import { WeeksModule } from './modules/weeks/weeks.module';
 
@@ -35,6 +36,7 @@ import { WeeksModule } from './modules/weeks/weeks.module';
     IngredientsModule,
     MealsModule,
     WeeksModule,
+    ShoppingListModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
