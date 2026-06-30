@@ -4,6 +4,12 @@ import { ILike, Repository } from 'typeorm';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
 import { Ingredient } from './entities/ingredient.entity';
 
+/** Vrai si l'erreur est une violation de contrainte unique Postgres (23505). */
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; driverError?: { code?: string } };
+  return (e?.driverError?.code ?? e?.code) === '23505';
+}
+
 @Injectable()
 export class IngredientsService {
   constructor(
@@ -20,12 +26,15 @@ export class IngredientsService {
     });
   }
 
-  /** Crée un ingrédient ; lève ConflictException si le nom existe déjà. */
+  /** Crée un ingrédient ; lève ConflictException si le nom existe déjà (casse ignorée). */
   async create(dto: CreateIngredientDto): Promise<Ingredient> {
     const name = dto.name.trim();
-    const exists = await this.ingredients.findOne({
-      where: { name: ILike(name) },
-    });
+    // Même sémantique que l'index UNIQUE(LOWER(name)) : égalité exacte
+    // insensible à la casse (pas un pattern LIKE).
+    const exists = await this.ingredients
+      .createQueryBuilder('ingredient')
+      .where('LOWER(ingredient.name) = LOWER(:name)', { name })
+      .getOne();
     if (exists) {
       throw new ConflictException('Un ingrédient porte déjà ce nom');
     }
@@ -33,6 +42,15 @@ export class IngredientsService {
       name,
       defaultUnit: dto.defaultUnit?.trim() ?? null,
     });
-    return this.ingredients.save(ingredient);
+    try {
+      return await this.ingredients.save(ingredient);
+    } catch (err) {
+      // Course : deux créations concurrentes passent le pré-check ; l'index
+      // rejette la seconde (23505) -> 409 plutôt qu'une 500.
+      if (isUniqueViolation(err)) {
+        throw new ConflictException('Un ingrédient porte déjà ce nom');
+      }
+      throw err;
+    }
   }
 }
