@@ -8,7 +8,9 @@ export class Ingredient {
   id!: string;
 
   @ApiProperty()
-  @Column({ unique: true })
+  // Unicité insensible à la casse : assurée par un index fonctionnel
+  // UNIQUE (LOWER(name)) côté migration, pas par une contrainte de colonne.
+  @Column()
   name!: string;
 
   @ApiProperty({ nullable: true })
