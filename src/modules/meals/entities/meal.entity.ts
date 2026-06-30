@@ -30,7 +30,7 @@ export class Meal {
   @Column()
   name!: string;
 
-  @ApiProperty({ nullable: true, minimum: 1, maximum: 5 })
+  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })
   @Column({ type: 'int', nullable: true })
   rating!: number | null;
 
@@ -38,7 +38,7 @@ export class Meal {
   @Column({ name: 'is_favorite', default: false })
   isFavorite!: boolean;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
   @Column({ name: 'last_cooked_at', type: 'timestamptz', nullable: true })
   lastCookedAt!: Date | null;
 

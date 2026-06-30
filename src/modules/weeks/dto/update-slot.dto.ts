@@ -11,6 +11,7 @@ import {
 export class UpdateSlotDto {
   @ApiProperty({
     required: false,
+    type: String,
     nullable: true,
     description: 'Repas à assigner, ou null pour vider le créneau',
   })

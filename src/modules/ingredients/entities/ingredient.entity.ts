@@ -13,7 +13,7 @@ export class Ingredient {
   @Column()
   name!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   @Column({ name: 'default_unit', nullable: true, type: 'varchar' })
   defaultUnit!: string | null;
 }

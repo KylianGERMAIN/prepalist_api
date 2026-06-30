@@ -1,13 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Meal } from '../entities/meal.entity';
+import { MealSummaryDto } from './meal-summary.dto';
 
 /**
  * Forme de la réponse paginée de GET /meals pour Swagger (type nommé côté front).
- * Décrit ce que renvoie réellement `PaginatedDto<Meal>` à l'exécution.
+ * Les items sont des résumés (sans ingrédients) : la liste reste légère.
  */
 export class PaginatedMealsDto {
-  @ApiProperty({ type: [Meal] })
-  items!: Meal[];
+  @ApiProperty({ type: [MealSummaryDto] })
+  items!: MealSummaryDto[];
 
   @ApiProperty()
   total!: number;

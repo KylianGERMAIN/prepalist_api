@@ -36,7 +36,7 @@ export class WeekSlot {
   @Column({ type: 'enum', enum: MealSlot })
   slot!: MealSlot;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   @Column({ name: 'meal_id', type: 'uuid', nullable: true })
   mealId!: string | null;
 
