@@ -83,7 +83,14 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "**/*.(t|j)s"
+      "**/*.(t|j)s",
+      "!**/*.module.ts",
+      "!**/*.entity.ts",
+      "!**/*.dto.ts",
+      "!**/*.controller.ts",
+      "!**/main.ts",
+      "!**/migrations/**",
+      "!**/config/**"
     ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
