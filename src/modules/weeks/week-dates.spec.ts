@@ -15,6 +15,11 @@ describe('week-dates', () => {
     expect(startOfWeek(new Date('2024-07-01T00:00:00Z'))).toBe('2024-07-01');
   });
 
+  it('anchors on Europe/Paris: Sunday 23:00 UTC is already Monday in Paris', () => {
+    // 2024-07-07 23:00 UTC = 2024-07-08 01:00 à Paris (été, UTC+2) -> lundi 08
+    expect(startOfWeek(new Date('2024-07-07T23:00:00Z'))).toBe('2024-07-08');
+  });
+
   it('addDays crosses month and year boundaries', () => {
     expect(addDays('2024-07-31', 1)).toBe('2024-08-01');
     expect(addDays('2024-07-01', -1)).toBe('2024-06-30');

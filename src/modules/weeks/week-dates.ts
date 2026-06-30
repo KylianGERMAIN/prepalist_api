@@ -1,15 +1,29 @@
+const APP_TIME_ZONE = 'Europe/Paris';
+
 /**
- * Lundi (UTC) de la semaine contenant `d`, au format `YYYY-MM-DD`.
- * On travaille en UTC pour rester cohérent avec les colonnes `date` Postgres
- * (pas de décalage de fuseau).
+ * Lundi de la semaine contenant l'instant `d`, au format `YYYY-MM-DD`,
+ * ancré sur le fuseau de l'app (Europe/Paris) et non sur UTC : un dimanche
+ * soir en heure locale reste dans la bonne semaine. On ne manipule que la
+ * date calendaire (insensible à l'heure d'été).
  */
-export function startOfWeek(d: Date): string {
-  const day = d.getUTCDay(); // 0 = dimanche … 6 = samedi
-  const diff = day === 0 ? -6 : 1 - day; // ramène au lundi
-  const monday = new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + diff),
-  );
-  return monday.toISOString().slice(0, 10);
+export function startOfWeek(d: Date, timeZone = APP_TIME_ZONE): string {
+  // Date calendaire (Y-M-D) telle que vue dans le fuseau cible.
+  const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+    .format(d)
+    .split('-')
+    .map(Number);
+
+  // Calcul du lundi en arithmétique calendaire pure (UTC = pas de DST en jeu).
+  const cal = new Date(Date.UTC(year, month - 1, day));
+  const weekday = cal.getUTCDay(); // 0 = dimanche … 6 = samedi
+  const diff = weekday === 0 ? -6 : 1 - weekday;
+  cal.setUTCDate(cal.getUTCDate() + diff);
+  return cal.toISOString().slice(0, 10);
 }
 
 /** Ajoute `n` jours à une date `YYYY-MM-DD` et renvoie `YYYY-MM-DD`. */
