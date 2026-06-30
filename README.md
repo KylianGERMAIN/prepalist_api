@@ -40,5 +40,8 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
   favori/fraîcheur + règle des restes), `PATCH /weeks/:id/slots/:slotId`.
 - **Phase 3** — liste de courses : `GET /weeks/:id/shopping-list`, agrégation
   dérivée (quantité × portions, groupée par ingrédient + unité). Pas de table.
+- **Phase 5** — rappel hebdo : cron (`@nestjs/schedule`, dimanche 18h) qui
+  rappelle aux utilisateurs sans semaine planifiée de composer la semaine à venir.
+  Livraison par log pour l'instant (canal email/push à brancher).
 
-Phases suivantes (ai, notifications) cf. `instruction.md` §9.
+Phase 4 (capture IA) écartée volontairement.

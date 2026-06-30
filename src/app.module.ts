@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from './config/data-source';
@@ -11,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { IngredientsModule } from './modules/ingredients/ingredients.module';
 import { MealsModule } from './modules/meals/meals.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ShoppingListModule } from './modules/shopping-list/shopping-list.module';
 import { UsersModule } from './modules/users/users.module';
 import { WeeksModule } from './modules/weeks/weeks.module';
@@ -21,6 +23,7 @@ import { WeeksModule } from './modules/weeks/weeks.module';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({ ...dataSourceOptions, autoLoadEntities: true }),
     }),
@@ -37,6 +40,7 @@ import { WeeksModule } from './modules/weeks/weeks.module';
     MealsModule,
     WeeksModule,
     ShoppingListModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
