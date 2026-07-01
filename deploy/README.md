@@ -1,57 +1,84 @@
-# Déploiement PrepaList (serveur / VPS)
+# Déploiement PrepaList — Neon + Render + Vercel
 
-Topologie : **Caddy** (TLS) → **front** (Next) → **api** (NestJS, interne) → **Postgres managé** (externe).
-Le back n'est pas exposé publiquement. Les images sont construites et poussées sur `ghcr.io` par la CI à chaque tag `vX.Y.Z`.
+Topologie : **Neon** (Postgres managé) ← **Render** (API NestJS, image Docker, publique) ← **Vercel** (front Next, appelle l'API en server-side).
 
-## 1. Prérequis (une fois)
+Déclenchement : **on ne déploie que sur bump de version.** `npm version` bump `package.json` **et** crée un tag `vX.Y.Z`. Le push du tag déclenche le workflow `deploy` de chaque repo, qui déploie Render (Deploy Hook) et Vercel (CLI). Les auto-deploys natifs des deux plateformes restent **désactivés** → on travaille librement sur `main` sans rien déployer.
 
-- Un **VPS** avec Docker + Docker Compose.
-- Un **domaine** (enregistrement DNS A/AAAA → IP du VPS).
-- Une base **Postgres managée** (Neon / Supabase / RDS...) avec ses identifiants.
-- Les **images GHCR** rendues publiques, ou un `docker login ghcr.io` sur le VPS (token avec `read:packages`).
-
-## 2. Publier les images
-
-Pousser un tag de version sur chaque repo (déclenche la CI `release`) :
-
-```bash
-# dans prepalist_api et prepalist_front
-git tag v0.1.0 && git push origin v0.1.0
+```
+main : commit … commit … commit        (rien ne se déploie)
+              │
+        npm version minor  ──►  tag v0.2.0  ──►  push --follow-tags
+                                                        │
+                          ┌─────────────────────────────┴───────────────┐
+                     GHA deploy (api)                              GHA deploy (front)
+                     curl Render Deploy Hook                       curl Vercel Deploy Hook
+                          │                                              │
+              Render: build Docker → Pre-Deploy migrations → up    Vercel: build → prod
 ```
 
-Produit `ghcr.io/kyliangermain/prepalist-api:0.1.0` et `...-front:0.1.0`.
+---
 
-## 3. Sur le serveur
+## 1. Neon (base de données)
 
-Copier le contenu de ce dossier `deploy/` puis :
+1. Créer un projet Neon → une base Postgres.
+2. Récupérer les identifiants de connexion (Dashboard → Connection Details). En déduire les variables :
+
+| Neon | Variable API |
+|------|--------------|
+| host (`...neon.tech`) | `DB_HOST` |
+| port (`5432`) | `DB_PORT` |
+| user | `DB_USERNAME` |
+| password | `DB_PASSWORD` |
+| database | `DB_NAME` |
+| — | `DB_SSL=true` (Neon impose TLS) |
+
+Rien d'autre : les tables sont créées par les migrations TypeORM (jouées par Render, cf. §2). `synchronize:false`, le schéma n'évolue que par migrations.
+
+---
+
+## 2. Render (API)
+
+**New → Web Service**, connecter le repo `prepalist_api`.
+
+- **Runtime** : `Docker` (utilise le `Dockerfile` du repo).
+- **Branch** : `main`.
+- **Auto-Deploy** : **No** (Settings → Build & Deploy). On déploie uniquement via le Deploy Hook sur tag.
+- **Pre-Deploy Command** : `pnpm migration:run:prod` — joue les migrations compilées (`dist/`) contre Neon avant de basculer sur la nouvelle version.
+- **Health Check Path** : `/health` (teste la DB, renvoie 503 si down).
+- **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur).
+
+Puis **Settings → Deploy Hook** : copier l'URL → la mettre dans le repo `prepalist_api` :
+`Settings → Secrets and variables → Actions → New secret` : `RENDER_DEPLOY_HOOK`.
+
+Noter l'**URL publique** du service Render (`https://prepalist-api-xxxx.onrender.com`) : c'est l'`API_URL` du front.
+
+---
+
+## 3. Vercel (front)
+
+1. Importer le repo `prepalist_front` (Production Branch = `main`).
+2. **Environment Variables** : `API_URL` = l'URL publique Render de l'API (production).
+3. L'auto-deploy sur push Git est déjà coupé par `vercel.json` (`git.deploymentEnabled:false`, commité dans le repo) → seul le Deploy Hook déploie.
+4. **Settings → Git → Deploy Hooks** : créer un hook sur la branche `main`, copier l'URL → repo `prepalist_front` : `Settings → Secrets and variables → Actions → New secret` : `VERCEL_DEPLOY_HOOK`.
+
+Le front est buildé nativement par Vercel (l'option `output: "standalone"` de `next.config.ts` est ignorée par Vercel, sans effet).
+
+---
+
+## 4. Releaser
+
+Sur chaque repo à déployer, depuis `main` à jour :
 
 ```bash
-cp .env.example .env             # renseigner DOMAIN + TAG (ex. 0.1.0)
-cp .env.prod.example .env.prod   # renseigner DB_* (managé, DB_SSL=true) + secrets JWT
-docker compose -f docker-compose.prod.yml pull
+npm version patch          # ou minor / major : bump package.json + commit + tag vX.Y.Z
+git push --follow-tags     # pousse le commit ET le tag → déclenche le workflow deploy
 ```
 
-## 4. Migrations (one-shot, à chaque déploiement qui en contient)
+Vérifier :
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm api pnpm migration:run:prod
+curl -fsS https://<render-url>/health        # {"database":"up"}
+# puis login dans le navigateur sur l'URL Vercel → les cookies httpOnly sont posés
 ```
 
-(S'exécute sur les migrations compilées dans l'image, contre la base managée.)
-
-## 5. Démarrer
-
-```bash
-docker compose -f docker-compose.prod.yml up -d
-```
-
-Caddy obtient le certificat TLS automatiquement. Vérifier :
-
-```bash
-curl -fsS https://$DOMAIN            # le front répond
-docker compose -f docker-compose.prod.yml exec api wget -qO- http://localhost:3000/health   # {"database":"up"}
-```
-
-## Mise à jour
-
-Pousser un nouveau tag → `docker compose pull` → migrations si besoin → `up -d`.
+Rollback : re-déployer une version antérieure via le dashboard Render/Vercel (historique des déploiements), ou re-taguer un ancien commit.
