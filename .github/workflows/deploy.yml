@@ -1,0 +1,17 @@
+name: deploy
+
+# Sur tag vX.Y.Z (créé par `npm version` + `git push --follow-tags`), déclenche un
+# déploiement Render via son Deploy Hook. On ne déploie QUE sur bump de version :
+# l'auto-deploy natif de Render doit être DÉSACTIVÉ (Settings → Build & Deploy → Auto-Deploy: No).
+# Render rebuild l'image Docker, joue la Pre-Deploy Command (migrations), puis expose l'API.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        run: curl -fsSL -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
