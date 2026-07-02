@@ -24,10 +24,9 @@ export class MealsService {
     private readonly ingredients: Repository<Ingredient>,
   ) {}
 
-  /** Crée un repas pour l'utilisateur, avec ses lignes d'ingrédients. */
-  async create(userId: string, dto: CreateMealDto): Promise<Meal> {
+  /** Crée un repas dans le catalogue partagé, avec ses lignes d'ingrédients. */
+  async create(dto: CreateMealDto): Promise<Meal> {
     const meal = this.meals.create({
-      userId,
       name: dto.name,
       rating: dto.rating ?? null,
       isFavorite: dto.isFavorite ?? false,
@@ -37,14 +36,9 @@ export class MealsService {
     return this.meals.save(meal);
   }
 
-  /** Liste paginée des repas de l'utilisateur (sans ingrédients), avec filtres. */
-  async findAll(
-    userId: string,
-    query: MealQueryDto,
-  ): Promise<PaginatedDto<Meal>> {
-    const qb = this.meals
-      .createQueryBuilder('meal')
-      .where('meal.user_id = :userId', { userId });
+  /** Liste paginée du catalogue de repas (sans ingrédients), avec filtres. */
+  async findAll(query: MealQueryDto): Promise<PaginatedDto<Meal>> {
+    const qb = this.meals.createQueryBuilder('meal');
 
     if (query.favorite !== undefined) {
       qb.andWhere('meal.is_favorite = :favorite', { favorite: query.favorite });
@@ -65,18 +59,18 @@ export class MealsService {
     return new PaginatedDto(items, total, query.page, query.limit);
   }
 
-  /** Récupère un repas de l'utilisateur (ingrédients chargés) ou lève 404. */
-  async findOne(userId: string, id: string): Promise<Meal> {
+  /** Récupère un repas du catalogue (ingrédients chargés) ou lève 404. */
+  async findOne(id: string): Promise<Meal> {
     const meal = await this.meals.findOne({ where: { id } });
-    if (!meal || meal.userId !== userId) {
+    if (!meal) {
       throw new NotFoundException('Repas introuvable');
     }
     return meal;
   }
 
   /** Met à jour un repas ; remplace les ingrédients si la liste est fournie. */
-  async update(userId: string, id: string, dto: UpdateMealDto): Promise<Meal> {
-    const meal = await this.findOne(userId, id);
+  async update(id: string, dto: UpdateMealDto): Promise<Meal> {
+    const meal = await this.findOne(id);
 
     if (dto.name !== undefined) meal.name = dto.name;
     if (dto.rating !== undefined) meal.rating = dto.rating;
@@ -89,22 +83,22 @@ export class MealsService {
     return this.meals.save(meal);
   }
 
-  /** Supprime un repas de l'utilisateur (cascade sur les lignes d'ingrédients). */
-  async remove(userId: string, id: string): Promise<void> {
-    const meal = await this.findOne(userId, id);
+  /** Supprime un repas du catalogue (cascade sur les lignes d'ingrédients). */
+  async remove(id: string): Promise<void> {
+    const meal = await this.findOne(id);
     await this.meals.remove(meal);
   }
 
   /** Marque un repas comme cuisiné : incrément atomique + date la dernière fois. */
-  async markCooked(userId: string, id: string): Promise<Meal> {
-    await this.findOne(userId, id); // garde d'ownership + 404
+  async markCooked(id: string): Promise<Meal> {
+    await this.findOne(id); // 404 si absent
     // Incrément en SQL pour éviter la perte de mise à jour (lost update) et le
     // rechargement inutile du graphe d'ingrédients par save().
     await this.meals.update(id, {
       timesCooked: () => '"times_cooked" + 1',
       lastCookedAt: new Date(),
     });
-    return this.findOne(userId, id);
+    return this.findOne(id);
   }
 
   /** Construit les lignes d'ingrédients en validant que tous existent. */

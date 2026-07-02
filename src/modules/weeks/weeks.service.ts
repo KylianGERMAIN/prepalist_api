@@ -81,7 +81,7 @@ export class WeeksService {
    */
   async generate(userId: string, id: string): Promise<Week> {
     const week = await this.findOne(userId, id);
-    const candidates = await this.meals.find({ where: { userId } });
+    const candidates = await this.meals.find();
     if (candidates.length === 0) {
       throw new BadRequestException('Aucune recette pour générer la semaine');
     }
@@ -132,7 +132,7 @@ export class WeeksService {
     return this.findOne(userId, id);
   }
 
-  /** Met à jour un créneau (repas / portions) après contrôle d'ownership. */
+  /** Met à jour un créneau (repas / portions) de la semaine de l'utilisateur. */
   async updateSlot(
     userId: string,
     weekId: string,
@@ -149,7 +149,7 @@ export class WeeksService {
     if (dto.mealId !== undefined) {
       if (dto.mealId !== null) {
         const meal = await this.meals.findOne({ where: { id: dto.mealId } });
-        if (!meal || meal.userId !== userId) {
+        if (!meal) {
           throw new BadRequestException('Repas introuvable');
         }
       }

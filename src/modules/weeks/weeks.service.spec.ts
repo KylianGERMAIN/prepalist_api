@@ -148,10 +148,10 @@ describe('WeeksService', () => {
     );
   });
 
-  it('updateSlot assigns an owned meal and servings', async () => {
+  it('updateSlot assigns a meal and servings', async () => {
     const slot = { id: 's1', mealId: null, servings: 1 };
     weeks.findOne.mockResolvedValue({ id: 'w1', userId: 'u1', slots: [slot] });
-    meals.findOne.mockResolvedValue({ id: 'm1', userId: 'u1' });
+    meals.findOne.mockResolvedValue({ id: 'm1' });
     await service.updateSlot('u1', 'w1', 's1', { mealId: 'm1', servings: 2 });
     expect(slots.update).toHaveBeenCalledWith('s1', {
       mealId: 'm1',
@@ -166,10 +166,10 @@ describe('WeeksService', () => {
     expect(slots.update).toHaveBeenCalledWith('s1', { mealId: null });
   });
 
-  it('updateSlot rejects a meal owned by another user', async () => {
+  it('updateSlot rejects a meal that does not exist in the catalog', async () => {
     const slot = { id: 's1', mealId: null, servings: 1 };
     weeks.findOne.mockResolvedValue({ id: 'w1', userId: 'u1', slots: [slot] });
-    meals.findOne.mockResolvedValue({ id: 'm1', userId: 'other' });
+    meals.findOne.mockResolvedValue(null);
     await expect(
       service.updateSlot('u1', 'w1', 's1', { mealId: 'm1' }),
     ).rejects.toThrow(BadRequestException);
