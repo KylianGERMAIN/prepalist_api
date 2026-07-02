@@ -17,7 +17,7 @@ FROM base AS build
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
-RUN pnpm prune --prod
+RUN pnpm prune --prod --ignore-scripts
 
 # Runtime minimal : node + dist + node_modules de prod uniquement.
 FROM node:22-alpine AS runtime
