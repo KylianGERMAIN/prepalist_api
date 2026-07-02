@@ -47,8 +47,11 @@ src/
 
 ## Git
 
-- Conventional Commits : `type(scope): sujet impératif`
+- Conventional Commits : `type(scope): subject`
   (`feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `build`, `ci`).
+- **Commit subject and body always in English** (repo convention EN standard).
+- Issue number as a suffix on the subject, not a prefix: `feat(scope): subject (#12)`
+  (survives GitHub's squash merge, which reuses the PR title verbatim).
 - Une PR par tâche vers `develop`, squash merge.
 - SemVer, tag par phase sur `main` (`v0.1.0`…). Pas de `v1.0.0` sans feu vert.
 - Secrets : `.env.example` commité, `.env` gitignored. Aucune clé dans le code.

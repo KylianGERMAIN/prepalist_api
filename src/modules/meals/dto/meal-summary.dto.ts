@@ -10,9 +10,6 @@ export class MealSummaryDto {
   id!: string;
 
   @ApiProperty()
-  userId!: string;
-
-  @ApiProperty()
   name!: string;
 
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })

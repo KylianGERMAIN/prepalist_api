@@ -5,6 +5,16 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.2.0] - 2026-07-02
+
+### Modifié
+
+- **Repas globaux** : le catalogue de repas est désormais partagé (plus de rattachement à un propriétaire). Lecture ouverte à tous les utilisateurs authentifiés.
+
+### Sécurité
+
+- **RBAC sur les repas** : création, modification et suppression réservées aux administrateurs (`RolesGuard` + `@Roles`). Les utilisateurs standard ont un accès en lecture seule.
+
 ## [0.1.0] - 2026-07-01
 
 Première version de l'API PrepaList v2 (NestJS + TypeORM + PostgreSQL).
@@ -21,4 +31,5 @@ Première version de l'API PrepaList v2 (NestJS + TypeORM + PostgreSQL).
 - **Exploitation** : health check `/health` avec vérification de la base, validation fail-fast des variables d'environnement au démarrage, migrations jouées en production, image Docker multi-stage.
 - **Déploiement** : cible Neon (Postgres managé) + Render, déclenché sur tag de version.
 
+[0.2.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.2.0
 [0.1.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.1.0

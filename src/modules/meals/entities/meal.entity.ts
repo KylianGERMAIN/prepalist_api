@@ -3,13 +3,9 @@ import {
   Column,
   CreateDateColumn,
   Entity,
-  Index,
-  JoinColumn,
-  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { User } from '../../users/entities/user.entity';
 import { MealIngredient } from './meal-ingredient.entity';
 
 @Entity('meals')
@@ -17,14 +13,6 @@ export class Meal {
   @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id!: string;
-
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'user_id' })
-  user?: User;
-
-  @Index()
-  @Column({ name: 'user_id' })
-  userId!: string;
 
   @ApiProperty()
   @Column()

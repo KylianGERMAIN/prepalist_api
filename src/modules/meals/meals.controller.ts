@@ -19,7 +19,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../users/entities/user.entity';
 import { CreateMealDto } from './dto/create-meal.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
 import { PaginatedMealsDto } from './dto/paginated-meals.dto';
@@ -35,59 +36,49 @@ export class MealsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Liste paginée des repas (filtres favorite/tag/name)',
+    summary: 'Liste paginée du catalogue de repas (filtres favorite/tag/name)',
   })
   @ApiOkResponse({ type: PaginatedMealsDto })
-  findAll(@CurrentUser('id') userId: string, @Query() query: MealQueryDto) {
-    return this.meals.findAll(userId, query);
+  findAll(@Query() query: MealQueryDto) {
+    return this.meals.findAll(query);
   }
 
   @Post()
-  @ApiOperation({ summary: 'Crée un repas' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Crée un repas (admin uniquement)' })
   @ApiCreatedResponse({ type: Meal })
-  create(@CurrentUser('id') userId: string, @Body() dto: CreateMealDto) {
-    return this.meals.create(userId, dto);
+  create(@Body() dto: CreateMealDto) {
+    return this.meals.create(dto);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Détail d’un repas (avec ingrédients)' })
   @ApiOkResponse({ type: Meal })
-  findOne(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.meals.findOne(userId, id);
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.meals.findOne(id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Met à jour un repas' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Met à jour un repas (admin uniquement)' })
   @ApiOkResponse({ type: Meal })
-  update(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateMealDto,
-  ) {
-    return this.meals.update(userId, id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMealDto) {
+    return this.meals.update(id, dto);
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Supprime un repas' })
+  @ApiOperation({ summary: 'Supprime un repas (admin uniquement)' })
   @ApiNoContentResponse()
-  remove(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.meals.remove(userId, id);
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.meals.remove(id);
   }
 
   @Post(':id/cooked')
   @ApiOperation({ summary: 'Marque un repas comme cuisiné' })
   @ApiCreatedResponse({ type: Meal })
-  markCooked(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.meals.markCooked(userId, id);
+  markCooked(@Param('id', ParseUUIDPipe) id: string) {
+    return this.meals.markCooked(id);
   }
 }
