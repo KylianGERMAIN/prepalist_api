@@ -20,6 +20,21 @@ describe('week-dates', () => {
     expect(startOfWeek(new Date('2024-07-07T23:00:00Z'))).toBe('2024-07-08');
   });
 
+  it('startOfWeek with a Tuesday shopping day returns the previous Tuesday', () => {
+    // 2024-07-04 = jeudi, shoppingDay=2 (mardi) -> mardi 2024-07-02
+    expect(startOfWeek(new Date('2024-07-04T12:00:00Z'), 2)).toBe('2024-07-02');
+  });
+
+  it('startOfWeek on the shopping day itself returns that day', () => {
+    // 2024-07-02 = mardi, shoppingDay=2 -> lui-même
+    expect(startOfWeek(new Date('2024-07-02T12:00:00Z'), 2)).toBe('2024-07-02');
+  });
+
+  it('startOfWeek with a Sunday shopping day (0) wraps correctly', () => {
+    // 2024-07-04 = jeudi, shoppingDay=0 (dimanche) -> dimanche 2024-06-30
+    expect(startOfWeek(new Date('2024-07-04T12:00:00Z'), 0)).toBe('2024-06-30');
+  });
+
   it('addDays crosses month and year boundaries', () => {
     expect(addDays('2024-07-31', 1)).toBe('2024-08-01');
     expect(addDays('2024-07-01', -1)).toBe('2024-06-30');

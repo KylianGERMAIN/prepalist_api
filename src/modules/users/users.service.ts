@@ -32,6 +32,13 @@ export class UsersService {
     return user;
   }
 
+  /** Met à jour le jour de courses de l'utilisateur et renvoie l'entité à jour. */
+  async updateShoppingDay(id: string, shoppingDay: number): Promise<User> {
+    const user = await this.findById(id);
+    user.shoppingDay = shoppingDay;
+    return this.users.save(user);
+  }
+
   /** Crée un utilisateur ; lève ConflictException si l'email existe déjà. */
   async create(
     email: string,

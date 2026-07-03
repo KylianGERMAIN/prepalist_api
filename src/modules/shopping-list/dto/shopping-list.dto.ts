@@ -30,7 +30,9 @@ export class ShoppingListDto {
   @ApiProperty()
   weekId: string;
 
-  @ApiProperty({ description: 'Lundi de la semaine (YYYY-MM-DD)' })
+  @ApiProperty({
+    description: 'Début de semaine = jour de courses (YYYY-MM-DD)',
+  })
   startDate: string;
 
   @ApiProperty({ type: [ShoppingListItemDto] })

@@ -7,13 +7,13 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
 import { Meal } from '../meals/entities/meal.entity';
+import { UsersService } from '../users/users.service';
 import { CreateWeekDto } from './dto/create-week.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { MealSlot, WeekSlot } from './entities/week-slot.entity';
 import { Week } from './entities/week.entity';
 import { addDays, startOfWeek } from './week-dates';
 
-const DAYS_IN_WEEK = 7;
 const MS_PER_DAY = 86_400_000;
 const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
@@ -25,12 +25,32 @@ export class WeeksService {
     @InjectRepository(WeekSlot)
     private readonly slots: Repository<WeekSlot>,
     @InjectRepository(Meal) private readonly meals: Repository<Meal>,
+    private readonly users: UsersService,
   ) {}
 
-  /** Crée une semaine (lundi -> dimanche) avec 14 créneaux vides. */
+  /**
+   * Créneaux vides d'une semaine bornée par le jour de courses : du DÎNER du
+   * jour de courses au DÉJEUNER du même jour la semaine suivante (14 créneaux).
+   */
+  private buildSlots(start: string): WeekSlot[] {
+    const slots: WeekSlot[] = [];
+    const empty = (date: string, slot: MealSlot) =>
+      this.slots.create({ date, slot, servings: 1, mealId: null });
+    slots.push(empty(start, MealSlot.DINNER));
+    for (let d = 1; d <= 6; d++) {
+      const date = addDays(start, d);
+      slots.push(empty(date, MealSlot.LUNCH), empty(date, MealSlot.DINNER));
+    }
+    slots.push(empty(addDays(start, 7), MealSlot.LUNCH));
+    return slots;
+  }
+
+  /** Crée une semaine (dîner du jour de courses -> déjeuner +7) avec 14 créneaux vides. */
   async create(userId: string, dto: CreateWeekDto): Promise<Week> {
+    const { shoppingDay } = await this.users.findById(userId);
     const start = startOfWeek(
-      dto.startDate ? new Date(dto.startDate) : new Date(),
+      dto.startDate ? new Date(`${dto.startDate}T00:00:00Z`) : new Date(),
+      shoppingDay,
     );
     const existing = await this.weeks.findOne({
       where: { userId, startDate: start },
@@ -39,28 +59,36 @@ export class WeeksService {
       throw new ConflictException('Une semaine existe déjà pour cette période');
     }
 
-    const slots: WeekSlot[] = [];
-    for (let d = 0; d < DAYS_IN_WEEK; d++) {
-      const date = addDays(start, d);
-      for (const slot of [MealSlot.LUNCH, MealSlot.DINNER]) {
-        slots.push(
-          this.slots.create({ date, slot, servings: 1, mealId: null }),
-        );
-      }
-    }
-
-    const week = this.weeks.create({ userId, startDate: start, slots });
+    const week = this.weeks.create({
+      userId,
+      startDate: start,
+      slots: this.buildSlots(start),
+    });
     return this.weeks.save(week);
   }
 
-  /** Semaine contenant aujourd'hui (lundi courant) ou 404. */
+  /** Semaine contenant aujourd'hui (début = jour de courses courant) ou 404. */
   async findCurrent(userId: string): Promise<Week> {
-    const start = startOfWeek(new Date());
+    const { shoppingDay } = await this.users.findById(userId);
+    const start = startOfWeek(new Date(), shoppingDay);
     const week = await this.weeks.findOne({
       where: { userId, startDate: start },
     });
     if (!week) {
       throw new NotFoundException('Aucune semaine pour la période courante');
+    }
+    return week;
+  }
+
+  /** Semaine dont le début (jour de courses) contient `date` (YYYY-MM-DD) ou 404. */
+  async findByStartDate(userId: string, date: string): Promise<Week> {
+    const { shoppingDay } = await this.users.findById(userId);
+    const start = startOfWeek(new Date(`${date}T00:00:00Z`), shoppingDay);
+    const week = await this.weeks.findOne({
+      where: { userId, startDate: start },
+    });
+    if (!week) {
+      throw new NotFoundException('Aucune semaine pour cette période');
     }
     return week;
   }

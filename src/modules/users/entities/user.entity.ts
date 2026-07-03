@@ -28,6 +28,15 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.USER })
   role!: UserRole;
 
+  @ApiProperty({
+    description:
+      'Jour de courses (0 = dimanche … 6 = samedi) : borne le début de la semaine de planning. Défaut 1 (lundi).',
+    minimum: 0,
+    maximum: 6,
+  })
+  @Column({ name: 'shopping_day', type: 'int', default: 1 })
+  shoppingDay!: number;
+
   @ApiProperty()
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
