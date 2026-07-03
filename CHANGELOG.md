@@ -5,6 +5,14 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.3.0] - 2026-07-03
+
+### Ajouté
+
+- **Jour de courses configurable** : chaque utilisateur choisit le jour qui borne sa semaine de planification (`shoppingDay`, endpoints `GET`/`PATCH /users/me`). La semaine démarre à ce jour au lieu d'un lundi figé, et `GET /weeks?startDate=` retourne la semaine contenant une date donnée.
+- **Liste de courses persistée et éditable** : la liste passe d'un calcul dérivé à la volée à une table matérialisée (`shopping_list_items`). Le cochage persiste, on ajoute des items manuels, et les items dérivés des plats ne sont ajoutés que par une synchronisation explicite (`POST /weeks/:id/shopping-list/sync`) qui complète la liste sans écraser ce qu'on a modifié. CRUD par `itemId`.
+- **Version de l'API dans `/health`** : la réponse expose la version courante.
+
 ## [0.2.1] - 2026-07-02
 
 ### Corrigé
@@ -37,6 +45,7 @@ Première version de l'API PrepaList v2 (NestJS + TypeORM + PostgreSQL).
 - **Exploitation** : health check `/health` avec vérification de la base, validation fail-fast des variables d'environnement au démarrage, migrations jouées en production, image Docker multi-stage.
 - **Déploiement** : cible Neon (Postgres managé) + Render, déclenché sur tag de version.
 
+[0.3.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.3.0
 [0.2.1]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.2.0
 [0.1.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.1.0
