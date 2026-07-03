@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Week } from '../weeks/entities/week.entity';
+import { WeeksModule } from '../weeks/weeks.module';
+import { ShoppingListItem } from './entities/shopping-list-item.entity';
 import { ShoppingListController } from './shopping-list.controller';
 import { ShoppingListService } from './shopping-list.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Week])],
+  imports: [TypeOrmModule.forFeature([ShoppingListItem]), WeeksModule],
   controllers: [ShoppingListController],
   providers: [ShoppingListService],
 })
