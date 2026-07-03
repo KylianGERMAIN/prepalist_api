@@ -32,6 +32,7 @@ describe('WeeksService', () => {
   let weeks: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
   let slots: { create: jest.Mock; save: jest.Mock; update: jest.Mock };
   let meals: { find: jest.Mock; findOne: jest.Mock };
+  let users: { findById: jest.Mock };
 
   beforeEach(() => {
     weeks = {
@@ -45,15 +46,60 @@ describe('WeeksService', () => {
       update: jest.fn(() => Promise.resolve()),
     };
     meals = { find: jest.fn(), findOne: jest.fn() };
-    service = new WeeksService(weeks as never, slots as never, meals as never);
+    users = { findById: jest.fn().mockResolvedValue({ shoppingDay: 1 }) };
+    service = new WeeksService(
+      weeks as never,
+      slots as never,
+      meals as never,
+      users as never,
+    );
   });
 
-  it('create builds 14 slots starting on the Monday', async () => {
+  it('create builds 14 slots from the shopping-day dinner to next-week lunch', async () => {
     weeks.findOne.mockResolvedValue(null);
-    await service.create('u1', { startDate: '2024-07-03' });
+    await service.create('u1', { startDate: '2024-07-03' }); // mercredi, shoppingDay=lundi
     const saved = weeks.save.mock.calls[0][0];
-    expect(saved.startDate).toBe('2024-07-01');
+    expect(saved.startDate).toBe('2024-07-01'); // lundi
     expect(saved.slots).toHaveLength(14);
+    expect(saved.slots[0]).toMatchObject({
+      date: '2024-07-01',
+      slot: MealSlot.DINNER,
+    });
+    expect(saved.slots[saved.slots.length - 1]).toMatchObject({
+      date: '2024-07-08',
+      slot: MealSlot.LUNCH,
+    });
+  });
+
+  it('create honors a non-default shopping day (Tuesday)', async () => {
+    users.findById.mockResolvedValue({ shoppingDay: 2 }); // mardi
+    weeks.findOne.mockResolvedValue(null);
+    await service.create('u1', { startDate: '2024-07-04' }); // jeudi
+    const saved = weeks.save.mock.calls[0][0];
+    expect(saved.startDate).toBe('2024-07-02'); // mardi précédent
+    expect(saved.slots[0]).toMatchObject({
+      date: '2024-07-02',
+      slot: MealSlot.DINNER,
+    });
+    expect(saved.slots[saved.slots.length - 1]).toMatchObject({
+      date: '2024-07-09',
+      slot: MealSlot.LUNCH,
+    });
+  });
+
+  it('findByStartDate resolves the start then returns the week', async () => {
+    weeks.findOne.mockResolvedValue({ id: 'w1', userId: 'u1' });
+    await service.findByStartDate('u1', '2024-07-03');
+    expect(weeks.findOne).toHaveBeenCalledWith({
+      where: { userId: 'u1', startDate: '2024-07-01' },
+    });
+  });
+
+  it('findByStartDate throws when none exists', async () => {
+    weeks.findOne.mockResolvedValue(null);
+    await expect(service.findByStartDate('u1', '2024-07-03')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('create throws when a week already exists for the period', async () => {

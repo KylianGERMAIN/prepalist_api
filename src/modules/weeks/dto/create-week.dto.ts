@@ -5,7 +5,7 @@ export class CreateWeekDto {
   @ApiProperty({
     required: false,
     description:
-      'Date calendaire dans la semaine voulue (YYYY-MM-DD) ; ramenée au lundi. Défaut : semaine courante.',
+      'Date calendaire dans la semaine voulue (YYYY-MM-DD) ; ramenée au début de semaine (jour de courses). Défaut : semaine courante.',
   })
   @IsOptional()
   // Date pure uniquement : un datetime serait réinterprété selon le fuseau.

@@ -26,7 +26,9 @@ export class Week {
   @Column({ name: 'user_id' })
   userId!: string;
 
-  @ApiProperty({ description: 'Lundi de la semaine (YYYY-MM-DD)' })
+  @ApiProperty({
+    description: 'Début de semaine = jour de courses (YYYY-MM-DD)',
+  })
   @Column({ name: 'start_date', type: 'date' })
   startDate!: string;
 

@@ -6,6 +6,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -16,6 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateWeekDto } from './dto/create-week.dto';
+import { FindWeekQueryDto } from './dto/find-week-query.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { Week } from './entities/week.entity';
 import { WeeksService } from './weeks.service';
@@ -31,6 +33,16 @@ export class WeeksController {
   @ApiOkResponse({ type: Week })
   findCurrent(@CurrentUser('id') userId: string) {
     return this.weeks.findCurrent(userId);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Semaine contenant une date (jour de courses)' })
+  @ApiOkResponse({ type: Week })
+  findByDate(
+    @CurrentUser('id') userId: string,
+    @Query() query: FindWeekQueryDto,
+  ) {
+    return this.weeks.findByStartDate(userId, query.startDate);
   }
 
   @Post()
