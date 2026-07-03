@@ -65,7 +65,7 @@ export class ShoppingListController {
 
   @Patch(':id/shopping-list/items/:itemId')
   @ApiOperation({
-    summary: 'Met à jour un item (checked ; contenu si MANUAL)',
+    summary: 'Met à jour un item (checked, nom, quantité, unité)',
   })
   @ApiOkResponse({ type: ShoppingListItemDto })
   updateItem(

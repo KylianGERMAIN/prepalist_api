@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
@@ -85,23 +85,53 @@ describe('ShoppingListService', () => {
 
   describe('forWeek (lazy init)', () => {
     it('syncs when no derived line exists yet, then reads', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
       items.count.mockResolvedValue(0);
       await service.forWeek('u1', 'w1');
       expect(items.count).toHaveBeenCalledWith({
         where: { weekId: 'w1', source: ShoppingItemSource.DERIVED },
       });
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
+      expect(txRepo.create).toHaveBeenCalled();
       expect(items.find).toHaveBeenCalled();
     });
 
     it('syncs on a manual-first week (a MANUAL row exists but no DERIVED yet)', async () => {
       // Le count ne porte que sur les DERIVED : la présence d'un item manuel
       // ne doit pas court-circuiter la première matérialisation des plats.
-      weeks.findOne.mockResolvedValue(week([]));
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
       items.count.mockResolvedValue(0);
+      txRepo.find.mockResolvedValue([
+        {
+          id: 'itM',
+          weekId: 'w1',
+          source: ShoppingItemSource.MANUAL,
+          ingredientId: null,
+          unit: 'lot',
+          name: 'Éponges',
+          quantity: 2,
+          checked: false,
+        },
+      ]);
       await service.forWeek('u1', 'w1');
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
+      expect(txRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ ingredientId: 'i1' }),
+      );
     });
 
     it('does not sync when derived items already exist', async () => {
@@ -130,77 +160,33 @@ describe('ShoppingListService', () => {
     });
   });
 
-  describe('sync (idempotent diff)', () => {
-    it('is a no-op on re-sync without change and keeps checked', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
-          {
-            servings: 2,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 125)] },
-          },
-        ]),
-      );
-      txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250, true),
-      ]);
-
-      await service.sync('u1', 'w1');
-
-      const saved = txRepo.save.mock.calls[0][0] as Array<{
-        id: string;
-        quantity: number;
-        checked: boolean;
-      }>;
-      expect(saved).toHaveLength(1);
-      expect(saved[0]).toMatchObject({
-        id: 'it1',
-        quantity: 250,
-        checked: true,
-      });
-      expect(txRepo.remove).not.toHaveBeenCalled();
-      expect(txRepo.create).not.toHaveBeenCalled();
-    });
-
-    it('updates quantity/name of a still-present derived line, preserving checked', async () => {
+  describe('sync (insert-only)', () => {
+    it('inserts only the ingredients that are absent', async () => {
       weeks.findOne.mockResolvedValue(
         week([
           {
             servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+            meal: {
+              ingredients: [
+                mi('i1', 'Tomate', 'g', 250),
+                mi('i9', 'Basilic', 'g', 10),
+              ],
+            },
           },
         ]),
       );
+      // i1 déjà présent -> seul i9 doit être inséré.
       txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 100, true),
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       ]);
 
       await service.sync('u1', 'w1');
 
-      const saved = txRepo.save.mock.calls[0][0] as Array<{
-        quantity: number;
-        checked: boolean;
-      }>;
-      expect(saved[0]).toMatchObject({ quantity: 250, checked: true });
-    });
-
-    it('inserts new ingredients as unchecked', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i9', 'Basilic', 'g', 10)] },
-          },
-        ]),
-      );
-      txRepo.find.mockResolvedValue([]);
-
-      await service.sync('u1', 'w1');
-
+      expect(txRepo.create).toHaveBeenCalledTimes(1);
       expect(txRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           ingredientId: 'i9',
           name: 'Basilic',
-          unit: 'g',
           quantity: 10,
           checked: false,
           source: ShoppingItemSource.DERIVED,
@@ -208,7 +194,7 @@ describe('ShoppingListService', () => {
       );
     });
 
-    it('deletes derived lines no longer produced by the meals', async () => {
+    it('does not touch the quantity of an existing item edited by the user', async () => {
       weeks.findOne.mockResolvedValue(
         week([
           {
@@ -217,27 +203,75 @@ describe('ShoppingListService', () => {
           },
         ]),
       );
-      const orphan = derivedItem('it2', 'i2', 'g', 'Pates', 240);
+      // Quantité éditée à 999 par l'utilisateur : le sync ne doit pas la réécrire.
       txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
-        orphan,
+        derivedItem('it1', 'i1', 'g', 'Tomate', 999),
       ]);
 
       await service.sync('u1', 'w1');
 
-      expect(txRepo.remove).toHaveBeenCalledWith([orphan]);
+      expect(txRepo.create).not.toHaveBeenCalled();
+      expect(txRepo.save).not.toHaveBeenCalled();
     });
 
-    it('only reads DERIVED rows, leaving MANUAL untouched', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
-      txRepo.find.mockResolvedValue([]);
+    it('never touches checked nor manual items', async () => {
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
+      const checkedDerived = derivedItem('it1', 'i1', 'g', 'Tomate', 250, true);
+      const manual = {
+        id: 'itM',
+        weekId: 'w1',
+        source: ShoppingItemSource.MANUAL,
+        ingredientId: null,
+        unit: 'lot',
+        name: 'Éponges',
+        quantity: 2,
+        checked: true,
+      };
+      txRepo.find.mockResolvedValue([checkedDerived, manual]);
 
       await service.sync('u1', 'w1');
 
-      expect(txRepo.find).toHaveBeenCalledWith({
-        where: { weekId: 'w1', source: ShoppingItemSource.DERIVED },
-      });
+      expect(txRepo.create).not.toHaveBeenCalled();
+      expect(txRepo.save).not.toHaveBeenCalled();
       expect(txRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the meals bring no new ingredient', async () => {
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
+      txRepo.find.mockResolvedValue([
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      ]);
+
+      await service.sync('u1', 'w1');
+
+      expect(txRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('compares against all current items, not only DERIVED', async () => {
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
+      await service.sync('u1', 'w1');
+      expect(txRepo.find).toHaveBeenCalledWith({ where: { weekId: 'w1' } });
     });
 
     it('propagates a write failure so the transaction rolls back', async () => {
@@ -305,14 +339,19 @@ describe('ShoppingListService', () => {
       expect(res.checked).toBe(true);
     });
 
-    it('rejects content edits on a DERIVED item', async () => {
+    it('allows name/quantity/unit edits on a DERIVED item', async () => {
       weeks.findOne.mockResolvedValue(week([]));
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
-      await expect(
-        service.updateItem('u1', 'w1', 'it1', { name: 'Autre' }),
-      ).rejects.toThrow(BadRequestException);
+      const res = await service.updateItem('u1', 'w1', 'it1', {
+        name: 'Tomates cerises',
+        quantity: 500,
+        unit: 'kg',
+      });
+      expect(res.name).toBe('Tomates cerises');
+      expect(res.quantity).toBe(500);
+      expect(res.unit).toBe('kg');
     });
 
     it('allows content edits on a MANUAL item', async () => {

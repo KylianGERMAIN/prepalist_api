@@ -15,31 +15,20 @@ export class UpdateShoppingListItemDto {
   @IsBoolean()
   checked?: boolean;
 
-  @ApiProperty({
-    required: false,
-    maxLength: 200,
-    description: 'Item MANUAL uniquement',
-  })
+  @ApiProperty({ required: false, maxLength: 200 })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
   name?: string;
 
-  @ApiProperty({
-    required: false,
-    minimum: 0,
-    description: 'Item MANUAL uniquement',
-  })
+  @ApiProperty({ required: false, minimum: 0 })
   @IsOptional()
   @IsNumber()
   @Min(0)
   quantity?: number;
 
-  @ApiProperty({
-    required: false,
-    description: 'Item MANUAL uniquement',
-  })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
   unit?: string;

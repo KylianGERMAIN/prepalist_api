@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Week } from '../weeks/entities/week.entity';
@@ -54,10 +50,10 @@ export class ShoppingListService {
   }
 
   /**
-   * Resynchronise les items DERIVED depuis les plats de la semaine (idempotent) :
-   * met à jour quantité/nom des lignes toujours présentes en conservant `checked`,
-   * insère les nouveaux ingrédients, supprime les dérivés orphelins. Les items
-   * MANUAL ne sont jamais touchés.
+   * Alimente la liste depuis les plats de la semaine : insère les ingrédients
+   * absents (checked=false) sans jamais modifier ni supprimer les items
+   * existants. La liste appartient à l'utilisateur, les plats ne font que
+   * l'enrichir.
    */
   async sync(userId: string, weekId: string): Promise<ShoppingListDto> {
     const week = await this.weeks.findOne(userId, weekId);
@@ -86,8 +82,9 @@ export class ShoppingListService {
   }
 
   /**
-   * Met à jour un item : `checked` sur n'importe quel item ; `name`/`quantity`/
-   * `unit` uniquement sur un MANUAL (un DERIVED est piloté par les plats + sync).
+   * Met à jour un item : `checked`, `name`, `quantity` et `unit` sont éditables
+   * sur tout item, quelle que soit sa source — la liste appartient à
+   * l'utilisateur. Seul l'ownership est contrôlé.
    */
   async updateItem(
     userId: string,
@@ -96,16 +93,6 @@ export class ShoppingListService {
     dto: UpdateShoppingListItemDto,
   ): Promise<ShoppingListItemDto> {
     const item = await this.findItem(userId, weekId, itemId);
-
-    const editsContent =
-      dto.name !== undefined ||
-      dto.quantity !== undefined ||
-      dto.unit !== undefined;
-    if (editsContent && item.source !== ShoppingItemSource.MANUAL) {
-      throw new BadRequestException(
-        'Seuls les items manuels peuvent être édités (nom, quantité, unité)',
-      );
-    }
 
     if (dto.checked !== undefined) {
       item.checked = dto.checked;
@@ -162,55 +149,42 @@ export class ShoppingListService {
   }
 
   /**
-   * Diff idempotent entre le calcul depuis les plats et les lignes DERIVED
-   * persistées, dans une transaction (update / insert / delete atomiques).
+   * Insert-only des ingrédients manquants : les plats ne font qu'alimenter la
+   * liste, ils ne la pilotent pas. Pour chaque ingrédient agrégé, on insère
+   * (checked=false) s'il n'existe aucun item pour la clé (ingredientId, unit) ;
+   * sinon on ne touche rien. Aucune mise à jour de quantité/nom, aucune
+   * suppression d'orphelin — la liste appartient à l'utilisateur.
    */
   private async syncDerived(week: Week): Promise<void> {
     const derived = this.computeDerived(week);
+    if (derived.length === 0) {
+      return;
+    }
     await this.items.manager.transaction(async (manager) => {
       const repo = manager.getRepository(ShoppingListItem);
-      const existing = await repo.find({
-        where: { weekId: week.id, source: ShoppingItemSource.DERIVED },
-      });
-      const existingByKey = new Map(
-        existing.map((item) => [
-          this.keyOf(item.ingredientId, item.unit),
-          item,
-        ]),
+      const existing = await repo.find({ where: { weekId: week.id } });
+      const existingKeys = new Set(
+        existing.map((item) => this.keyOf(item.ingredientId, item.unit)),
       );
 
-      const toSave: ShoppingListItem[] = [];
-      for (const line of derived) {
-        const key = this.keyOf(line.ingredientId, line.unit);
-        const match = existingByKey.get(key);
-        if (match) {
-          // Conserve `checked` : seules quantité/nom suivent les plats.
-          match.quantity = line.quantity;
-          match.name = line.name;
-          toSave.push(match);
-          existingByKey.delete(key);
-        } else {
-          toSave.push(
-            repo.create({
-              weekId: week.id,
-              source: ShoppingItemSource.DERIVED,
-              ingredientId: line.ingredientId,
-              name: line.name,
-              unit: line.unit,
-              quantity: line.quantity,
-              checked: false,
-            }),
-          );
-        }
-      }
+      const toInsert = derived
+        .filter(
+          (line) => !existingKeys.has(this.keyOf(line.ingredientId, line.unit)),
+        )
+        .map((line) =>
+          repo.create({
+            weekId: week.id,
+            source: ShoppingItemSource.DERIVED,
+            ingredientId: line.ingredientId,
+            name: line.name,
+            unit: line.unit,
+            quantity: line.quantity,
+            checked: false,
+          }),
+        );
 
-      // Ce qui reste dans la map n'est plus produit par les plats -> orphelin.
-      const orphans = [...existingByKey.values()];
-      if (orphans.length > 0) {
-        await repo.remove(orphans);
-      }
-      if (toSave.length > 0) {
-        await repo.save(toSave);
+      if (toInsert.length > 0) {
+        await repo.save(toInsert);
       }
     });
   }
