@@ -1,4 +1,5 @@
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
@@ -84,7 +85,7 @@ describe('ShoppingListService', () => {
   });
 
   describe('forWeek (lazy init)', () => {
-    it('syncs when no derived line exists yet, then reads', async () => {
+    it('syncs when the list is entirely empty, then reads', async () => {
       weeks.findOne.mockResolvedValue(
         week([
           {
@@ -95,17 +96,13 @@ describe('ShoppingListService', () => {
       );
       items.count.mockResolvedValue(0);
       await service.forWeek('u1', 'w1');
-      expect(items.count).toHaveBeenCalledWith({
-        where: { weekId: 'w1', source: ShoppingItemSource.DERIVED },
-      });
+      expect(items.count).toHaveBeenCalledWith({ where: { weekId: 'w1' } });
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
       expect(txRepo.create).toHaveBeenCalled();
       expect(items.find).toHaveBeenCalled();
     });
 
-    it('syncs on a manual-first week (a MANUAL row exists but no DERIVED yet)', async () => {
-      // Le count ne porte que sur les DERIVED : la présence d'un item manuel
-      // ne doit pas court-circuiter la première matérialisation des plats.
+    it('does not sync when the list already holds items (e.g. a manual one)', async () => {
       weeks.findOne.mockResolvedValue(
         week([
           {
@@ -114,29 +111,7 @@ describe('ShoppingListService', () => {
           },
         ]),
       );
-      items.count.mockResolvedValue(0);
-      txRepo.find.mockResolvedValue([
-        {
-          id: 'itM',
-          weekId: 'w1',
-          source: ShoppingItemSource.MANUAL,
-          ingredientId: null,
-          unit: 'lot',
-          name: 'Éponges',
-          quantity: 2,
-          checked: false,
-        },
-      ]);
-      await service.forWeek('u1', 'w1');
-      expect(items.manager.transaction).toHaveBeenCalledTimes(1);
-      expect(txRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ ingredientId: 'i1' }),
-      );
-    });
-
-    it('does not sync when derived items already exist', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
-      items.count.mockResolvedValue(3);
+      items.count.mockResolvedValue(1);
       await service.forWeek('u1', 'w1');
       expect(items.manager.transaction).not.toHaveBeenCalled();
     });
@@ -380,6 +355,21 @@ describe('ShoppingListService', () => {
       await expect(
         service.updateItem('u1', 'w1', 'nope', { checked: true }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('maps a unique-index violation (23505) to a 409', async () => {
+      weeks.findOne.mockResolvedValue(week([]));
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      items.save.mockRejectedValue(
+        new QueryFailedError('update', [], {
+          code: '23505',
+        } as unknown as Error),
+      );
+      await expect(
+        service.updateItem('u1', 'w1', 'it1', { unit: 'kg' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 

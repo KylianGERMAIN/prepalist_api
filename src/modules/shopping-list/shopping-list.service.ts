@@ -1,6 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { Week } from '../weeks/entities/week.entity';
 import { WeeksService } from '../weeks/weeks.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -34,12 +38,12 @@ export class ShoppingListService {
    */
   async forWeek(userId: string, weekId: string): Promise<ShoppingListDto> {
     const week = await this.weeks.findOne(userId, weekId);
-    // Compte les seuls DERIVED : un ajout manuel ne doit pas empêcher la
-    // première matérialisation des items issus des plats.
-    const derivedCount = await this.items.count({
-      where: { weekId, source: ShoppingItemSource.DERIVED },
-    });
-    if (derivedCount === 0) {
+    // Init seulement si la liste est totalement vide : compter les DERIVED
+    // créerait un effet falaise (cocher/supprimer le dernier dérivé ré-injecte
+    // tout au prochain GET). Un ajout manuel avant tout GET est inatteignable
+    // via l'UI (la page fait toujours un GET d'abord).
+    const count = await this.items.count({ where: { weekId } });
+    if (count === 0) {
       // ponytail: deux GET concurrents sur une semaine vide lanceraient deux
       // sync -> l'index unique partiel fait échouer le second (500). Acceptable
       // en app mono-utilisateur ; sous charge, avaler le conflit d'unicité ou
@@ -107,8 +111,23 @@ export class ShoppingListService {
       item.unit = dto.unit;
     }
 
-    const saved = await this.items.save(item);
-    return new ShoppingListItemDto(saved);
+    try {
+      const saved = await this.items.save(item);
+      return new ShoppingListItemDto(saved);
+    } catch (err) {
+      // Édition d'un DERIVED amenant sa clé (ingredientId, unit) sur celle d'un
+      // autre dérivé -> collision sur l'index unique partiel. On refuse en 409
+      // plutôt que de crasher en 500 ; le verrouillage de l'unité est assumé absent.
+      if (
+        err instanceof QueryFailedError &&
+        err.driverError?.code === '23505'
+      ) {
+        throw new ConflictException(
+          'Un item dérivé identique (ingrédient + unité) existe déjà',
+        );
+      }
+      throw err;
+    }
   }
 
   /** Supprime un item de la liste. */
