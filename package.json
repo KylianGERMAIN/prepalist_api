@@ -1,6 +1,6 @@
 {
   "name": "prepalist-api",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "API meal-prep PrepaList v2 (NestJS + TypeORM + PostgreSQL)",
   "private": true,
   "packageManager": "pnpm@10.30.0",

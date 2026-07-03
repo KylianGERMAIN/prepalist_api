@@ -33,4 +33,20 @@ describe('UsersService', () => {
     repo.findOne.mockResolvedValue(null);
     await expect(service.findById('nope')).rejects.toThrow(NotFoundException);
   });
+
+  it('updateShoppingDay persists the new day', async () => {
+    repo.findOne.mockResolvedValue({ id: '1', shoppingDay: 1 });
+    const user = await service.updateShoppingDay('1', 2);
+    expect(repo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ shoppingDay: 2 }),
+    );
+    expect(user.shoppingDay).toBe(2);
+  });
+
+  it('updateShoppingDay throws when the user is missing', async () => {
+    repo.findOne.mockResolvedValue(null);
+    await expect(service.updateShoppingDay('nope', 2)).rejects.toThrow(
+      NotFoundException,
+    );
+  });
 });

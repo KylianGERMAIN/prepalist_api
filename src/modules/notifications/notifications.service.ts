@@ -21,13 +21,21 @@ export class NotificationsService {
    */
   @Cron('0 18 * * 0')
   async sendWeeklyReminders(): Promise<number> {
-    const nextMonday = addDays(startOfWeek(new Date()), 7);
-    const planned = await this.weeks.find({ where: { startDate: nextMonday } });
-    const plannedUserIds = new Set(planned.map((week) => week.userId));
-
+    const now = new Date();
     // ponytail: charge tous les users (app mono-user). Filtrer en SQL si ça grossit.
     const users = await this.users.find();
-    const toRemind = users.filter((user) => !plannedUserIds.has(user.id));
+
+    // La "semaine à venir" dépend du jour de courses de chaque utilisateur.
+    const toRemind: User[] = [];
+    for (const user of users) {
+      const nextStart = addDays(startOfWeek(now, user.shoppingDay), 7);
+      const planned = await this.weeks.findOne({
+        where: { userId: user.id, startDate: nextStart },
+      });
+      if (!planned) {
+        toRemind.push(user);
+      }
+    }
 
     for (const user of toRemind) {
       // ponytail: livraison par log (seam). Brancher email/push ici une fois le

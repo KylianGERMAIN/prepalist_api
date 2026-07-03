@@ -1,28 +1,39 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  ShoppingItemSource,
+  ShoppingListItem,
+} from '../entities/shopping-list-item.entity';
 
 export class ShoppingListItemDto {
   @ApiProperty()
-  ingredientId: string;
+  id: string;
+
+  @ApiProperty({ enum: ShoppingItemSource })
+  source: ShoppingItemSource;
+
+  @ApiProperty({ type: String, nullable: true })
+  ingredientId: string | null;
 
   @ApiProperty()
   name: string;
 
-  @ApiProperty()
-  unit: string;
+  @ApiProperty({ type: String, nullable: true })
+  unit: string | null;
+
+  @ApiProperty({ type: Number, nullable: true })
+  quantity: number | null;
 
   @ApiProperty()
-  quantity: number;
+  checked: boolean;
 
-  constructor(
-    ingredientId: string,
-    name: string,
-    unit: string,
-    quantity: number,
-  ) {
-    this.ingredientId = ingredientId;
-    this.name = name;
-    this.unit = unit;
-    this.quantity = quantity;
+  constructor(item: ShoppingListItem) {
+    this.id = item.id;
+    this.source = item.source;
+    this.ingredientId = item.ingredientId;
+    this.name = item.name;
+    this.unit = item.unit;
+    this.quantity = item.quantity;
+    this.checked = item.checked;
   }
 }
 
@@ -30,7 +41,9 @@ export class ShoppingListDto {
   @ApiProperty()
   weekId: string;
 
-  @ApiProperty({ description: 'Lundi de la semaine (YYYY-MM-DD)' })
+  @ApiProperty({
+    description: 'Début de semaine = jour de courses (YYYY-MM-DD)',
+  })
   startDate: string;
 
   @ApiProperty({ type: [ShoppingListItemDto] })
