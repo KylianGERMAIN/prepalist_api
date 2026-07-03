@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { requestId } from './common/middleware/request-id.middleware';
+import { APP_VERSION } from './common/version';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -34,7 +35,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('PrepaList API')
     .setDescription('API meal-prep PrepaList v2')
-    .setVersion('0.1.0')
+    .setVersion(APP_VERSION)
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);

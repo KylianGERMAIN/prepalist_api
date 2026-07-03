@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Public } from '../../common/decorators/public.decorator';
+import { APP_VERSION } from '../../common/version';
 
 @ApiTags('health')
 @Controller('health')
@@ -26,6 +27,7 @@ export class HealthController {
       status: 'ok',
       database: 'up',
       timestamp: new Date().toISOString(),
+      version: APP_VERSION,
     };
   }
 }
