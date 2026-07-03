@@ -84,15 +84,27 @@ describe('ShoppingListService', () => {
   });
 
   describe('forWeek (lazy init)', () => {
-    it('syncs when the table is empty, then reads', async () => {
+    it('syncs when no derived line exists yet, then reads', async () => {
       weeks.findOne.mockResolvedValue(week([]));
       items.count.mockResolvedValue(0);
       await service.forWeek('u1', 'w1');
+      expect(items.count).toHaveBeenCalledWith({
+        where: { weekId: 'w1', source: ShoppingItemSource.DERIVED },
+      });
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
       expect(items.find).toHaveBeenCalled();
     });
 
-    it('does not sync when the table already has items', async () => {
+    it('syncs on a manual-first week (a MANUAL row exists but no DERIVED yet)', async () => {
+      // Le count ne porte que sur les DERIVED : la présence d'un item manuel
+      // ne doit pas court-circuiter la première matérialisation des plats.
+      weeks.findOne.mockResolvedValue(week([]));
+      items.count.mockResolvedValue(0);
+      await service.forWeek('u1', 'w1');
+      expect(items.manager.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not sync when derived items already exist', async () => {
       weeks.findOne.mockResolvedValue(week([]));
       items.count.mockResolvedValue(3);
       await service.forWeek('u1', 'w1');
@@ -226,6 +238,21 @@ describe('ShoppingListService', () => {
         where: { weekId: 'w1', source: ShoppingItemSource.DERIVED },
       });
       expect(txRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('propagates a write failure so the transaction rolls back', async () => {
+      weeks.findOne.mockResolvedValue(
+        week([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
+      txRepo.find.mockResolvedValue([]);
+      txRepo.save.mockRejectedValue(new Error('write failed'));
+
+      await expect(service.sync('u1', 'w1')).rejects.toThrow('write failed');
     });
 
     it('aggregates by ingredient + unit scaled by servings, rounded to 2 decimals', async () => {

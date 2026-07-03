@@ -38,8 +38,12 @@ export class ShoppingListService {
    */
   async forWeek(userId: string, weekId: string): Promise<ShoppingListDto> {
     const week = await this.weeks.findOne(userId, weekId);
-    const count = await this.items.count({ where: { weekId } });
-    if (count === 0) {
+    // Compte les seuls DERIVED : un ajout manuel ne doit pas empêcher la
+    // première matérialisation des items issus des plats.
+    const derivedCount = await this.items.count({
+      where: { weekId, source: ShoppingItemSource.DERIVED },
+    });
+    if (derivedCount === 0) {
       // ponytail: deux GET concurrents sur une semaine vide lanceraient deux
       // sync -> l'index unique partiel fait échouer le second (500). Acceptable
       // en app mono-utilisateur ; sous charge, avaler le conflit d'unicité ou

@@ -1,9 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class CreateShoppingListItemDto {
-  @ApiProperty()
+  @ApiProperty({ maxLength: 200 })
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
   name!: string;
 
   @ApiProperty({ required: false, minimum: 0 })

@@ -38,7 +38,9 @@ export class InitShoppingListItems1783100000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE "shopping_list_items"`);
-    await queryRunner.query(`DROP TYPE "shopping_list_items_source_enum"`);
+    await queryRunner.query(`DROP TABLE IF EXISTS "shopping_list_items"`);
+    await queryRunner.query(
+      `DROP TYPE IF EXISTS "shopping_list_items_source_enum"`,
+    );
   }
 }

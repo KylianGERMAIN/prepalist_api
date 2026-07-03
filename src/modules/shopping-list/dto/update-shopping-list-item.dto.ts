@@ -1,9 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsBoolean,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -15,10 +17,13 @@ export class UpdateShoppingListItemDto {
 
   @ApiProperty({
     required: false,
+    maxLength: 200,
     description: 'Item MANUAL uniquement',
   })
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
   name?: string;
 
   @ApiProperty({
