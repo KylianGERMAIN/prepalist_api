@@ -5,6 +5,12 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.3.1] - 2026-07-29
+
+### Corrigé
+
+- **`/health` ne requête plus la base** : la sonde de readiness (`SELECT 1`) réveillait le compute Neon à chaque ping du keep-alive, épuisant le quota d'heures de calcul du plan gratuit et bloquant les déploiements. `/health` devient un liveness pur (`status`, `uptime`, `timestamp`, `version`), sans accès Postgres. Le champ `database` disparaît de la réponse, l'endpoint ne renvoie plus 503.
+
 ## [0.3.0] - 2026-07-03
 
 ### Ajouté
@@ -45,6 +51,7 @@ Première version de l'API PrepaList v2 (NestJS + TypeORM + PostgreSQL).
 - **Exploitation** : health check `/health` avec vérification de la base, validation fail-fast des variables d'environnement au démarrage, migrations jouées en production, image Docker multi-stage.
 - **Déploiement** : cible Neon (Postgres managé) + Render, déclenché sur tag de version.
 
+[0.3.1]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.3.1
 [0.3.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.3.0
 [0.2.1]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KylianGERMAIN/prepalist_api/releases/tag/v0.2.0
