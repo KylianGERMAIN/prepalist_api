@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, QueryFailedError, Repository } from 'typeorm';
+import { DeepPartial, Repository } from 'typeorm';
+import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
 import {
   ShoppingItemSource,
@@ -28,8 +30,6 @@ export class PlanService {
     @InjectRepository(PlanSlot)
     private readonly slots: Repository<PlanSlot>,
     @InjectRepository(Meal) private readonly meals: Repository<Meal>,
-    @InjectRepository(ShoppingListItem)
-    private readonly items: Repository<ShoppingListItem>,
     private readonly users: UsersService,
   ) {}
 
@@ -69,11 +69,15 @@ export class PlanService {
       // Course sur le premier accès : deux requêtes concurrentes passent le
       // findOne avant l'insert. L'unicité (user_id) fait échouer la seconde en
       // 23505 ; on relit le plan gagnant plutôt que de remonter un 500.
-      if (this.isUniqueViolation(err)) {
+      if (isUniqueViolation(err)) {
         const winner = await this.plans.findOne({ where: { userId } });
         if (winner) {
           return winner;
         }
+        // Conflit d'unicité mais plus de plan à relire : le compte a disparu
+        // entre les deux (CASCADE). Un 409 décrit la situation, là où le
+        // QueryFailedError brut remonterait un 500 sur un conflit résolu.
+        throw new ConflictException('Plan indisponible, réessaie');
       }
       throw err;
     }
@@ -83,10 +87,6 @@ export class PlanService {
   private async anchorFor(userId: string): Promise<string> {
     const { shoppingDay } = await this.users.findById(userId);
     return lastWeekdayOnOrBefore(today(), shoppingDay);
-  }
-
-  private isUniqueViolation(err: unknown): boolean {
-    return err instanceof QueryFailedError && err.driverError?.code === '23505';
   }
 
   /**
@@ -188,8 +188,9 @@ export class PlanService {
    * supprime jamais un item existant.
    *
    * Le réancrage a lieu ici et nulle part ailleurs : c'est le seul geste qui
-   * marque le début d'un nouveau cycle, donc le seul moment où l'ancre
-   * d'affichage doit bouger. Un GET ne doit rien écrire.
+   * marque le début d'un nouveau cycle, donc le seul moment où l'ancre doit
+   * bouger. Les GET écrivent (création du plan, init de la liste) mais ne
+   * déplacent jamais l'ancre.
    */
   async clearSlots(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);

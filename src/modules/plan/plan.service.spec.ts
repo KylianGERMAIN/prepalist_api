@@ -45,7 +45,6 @@ describe('PlanService', () => {
   };
   let slots: { create: jest.Mock; save: jest.Mock; update: jest.Mock };
   let meals: { find: jest.Mock; findOne: jest.Mock };
-  let items: { delete: jest.Mock };
   let users: { findById: jest.Mock };
   let manager: { update: jest.Mock; delete: jest.Mock };
   let transaction: jest.Mock;
@@ -60,20 +59,18 @@ describe('PlanService', () => {
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
       save: jest.fn((x: unknown) => x),
       manager: { transaction },
-    } as never;
+    };
     slots = {
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
       save: jest.fn((x: unknown) => x),
       update: jest.fn(),
     };
     meals = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
-    items = { delete: jest.fn() };
     users = { findById: jest.fn().mockResolvedValue({ shoppingDay: 2 }) };
     service = new PlanService(
       plans as never,
       slots as never,
       meals as never,
-      items as never,
       users as never,
     );
   });
@@ -276,9 +273,11 @@ describe('PlanService', () => {
       plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
       await service.clearSlots('u1');
       expect(transaction).toHaveBeenCalledTimes(1);
-      // Rien n'est écrit hors du manager transactionnel.
+      expect(manager.update).toHaveBeenCalledTimes(2);
+      expect(manager.delete).toHaveBeenCalledTimes(1);
+      // Aucune écriture ne contourne le manager transactionnel.
       expect(slots.update).not.toHaveBeenCalled();
-      expect(items.delete).not.toHaveBeenCalled();
+      expect(plans.save).not.toHaveBeenCalled();
     });
   });
 });

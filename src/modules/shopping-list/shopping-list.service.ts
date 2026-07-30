@@ -1,10 +1,12 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { QueryFailedError, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
+import { isUniqueViolation } from '../../common/postgres-errors';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -14,11 +16,6 @@ import {
   ShoppingItemSource,
   ShoppingListItem,
 } from './entities/shopping-list-item.entity';
-
-/** Violation d'unicité Postgres (`unique_violation`). */
-function isUniqueViolation(err: unknown): boolean {
-  return err instanceof QueryFailedError && err.driverError?.code === '23505';
-}
 
 /** Ligne dérivée calculée depuis les plats, avant matérialisation. */
 interface DerivedLine {
@@ -30,6 +27,8 @@ interface DerivedLine {
 
 @Injectable()
 export class ShoppingListService {
+  private readonly logger = new Logger(ShoppingListService.name);
+
   constructor(
     @InjectRepository(ShoppingListItem)
     private readonly items: Repository<ShoppingListItem>,
@@ -58,6 +57,12 @@ export class ShoppingListService {
         if (!isUniqueViolation(err)) {
           throw err;
         }
+        // Tracé : le cas normal est bénin (le gagnant a déjà écrit, la relecture
+        // voit la liste complète), mais s'il survient pour une autre raison
+        // l'utilisateur reçoit une liste partielle en 200 sans autre indice.
+        this.logger.warn(
+          `Init concurrente de la liste du plan ${plan.id} : conflit avalé`,
+        );
       }
     }
     return this.read(plan);
