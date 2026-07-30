@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
-import { Week } from '../weeks/entities/week.entity';
-import { WeeksService } from '../weeks/weeks.service';
+import { Plan } from '../plan/entities/plan.entity';
+import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
 import { ShoppingListDto, ShoppingListItemDto } from './dto/shopping-list.dto';
 import { UpdateShoppingListItemDto } from './dto/update-shopping-list-item.dto';
@@ -28,52 +28,50 @@ export class ShoppingListService {
   constructor(
     @InjectRepository(ShoppingListItem)
     private readonly items: Repository<ShoppingListItem>,
-    private readonly weeks: WeeksService,
+    private readonly plan: PlanService,
   ) {}
 
   /**
-   * Liste de courses matérialisée d'une semaine. Init paresseuse : si aucune
-   * ligne n'existe encore, on lance un `sync` pour peupler la table depuis les
-   * plats, puis on relit — l'utilisateur voit sa liste sans action explicite.
+   * Liste de courses matérialisée du plan. Init paresseuse : si aucune ligne
+   * n'existe encore, on lance un `sync` pour peupler la table depuis les plats,
+   * puis on relit — l'utilisateur voit sa liste sans action explicite.
    */
-  async forWeek(userId: string, weekId: string): Promise<ShoppingListDto> {
-    const week = await this.weeks.findOne(userId, weekId);
+  async forPlan(userId: string): Promise<ShoppingListDto> {
+    const plan = await this.plan.ensureForUser(userId);
     // Init seulement si la liste est totalement vide : compter les DERIVED
     // créerait un effet falaise (cocher/supprimer le dernier dérivé ré-injecte
     // tout au prochain GET). Un ajout manuel avant tout GET est inatteignable
     // via l'UI (la page fait toujours un GET d'abord).
-    const count = await this.items.count({ where: { weekId } });
+    const count = await this.items.count({ where: { planId: plan.id } });
     if (count === 0) {
-      // ponytail: deux GET concurrents sur une semaine vide lanceraient deux
-      // sync -> l'index unique partiel fait échouer le second (500). Acceptable
-      // en app mono-utilisateur ; sous charge, avaler le conflit d'unicité ou
-      // poser un verrou advisory sur weekId.
-      await this.syncDerived(week);
+      // ponytail: deux GET concurrents sur un plan vide lanceraient deux sync ->
+      // l'index unique partiel fait échouer le second (500). Acceptable en app
+      // mono-utilisateur ; sous charge, avaler le conflit d'unicité ou poser un
+      // verrou advisory sur planId.
+      await this.syncDerived(plan);
     }
-    return this.read(week);
+    return this.read(plan);
   }
 
   /**
-   * Alimente la liste depuis les plats de la semaine : insère les ingrédients
-   * absents (checked=false) sans jamais modifier ni supprimer les items
-   * existants. La liste appartient à l'utilisateur, les plats ne font que
-   * l'enrichir.
+   * Alimente la liste depuis les plats du plan : insère les ingrédients absents
+   * (checked=false) sans jamais modifier ni supprimer les items existants. La
+   * liste appartient à l'utilisateur, les plats ne font que l'enrichir.
    */
-  async sync(userId: string, weekId: string): Promise<ShoppingListDto> {
-    const week = await this.weeks.findOne(userId, weekId);
-    await this.syncDerived(week);
-    return this.read(week);
+  async sync(userId: string): Promise<ShoppingListDto> {
+    const plan = await this.plan.ensureForUser(userId);
+    await this.syncDerived(plan);
+    return this.read(plan);
   }
 
   /** Ajoute un item manuel (hors plats) à la liste. */
   async addItem(
     userId: string,
-    weekId: string,
     dto: CreateShoppingListItemDto,
   ): Promise<ShoppingListItemDto> {
-    await this.weeks.findOne(userId, weekId);
+    const plan = await this.plan.ensureForUser(userId);
     const item = this.items.create({
-      weekId,
+      planId: plan.id,
       source: ShoppingItemSource.MANUAL,
       ingredientId: null,
       name: dto.name,
@@ -92,11 +90,10 @@ export class ShoppingListService {
    */
   async updateItem(
     userId: string,
-    weekId: string,
     itemId: string,
     dto: UpdateShoppingListItemDto,
   ): Promise<ShoppingListItemDto> {
-    const item = await this.findItem(userId, weekId, itemId);
+    const item = await this.findItem(userId, itemId);
 
     if (dto.checked !== undefined) {
       item.checked = dto.checked;
@@ -131,23 +128,22 @@ export class ShoppingListService {
   }
 
   /** Supprime un item de la liste. */
-  async removeItem(
-    userId: string,
-    weekId: string,
-    itemId: string,
-  ): Promise<void> {
-    const item = await this.findItem(userId, weekId, itemId);
+  async removeItem(userId: string, itemId: string): Promise<void> {
+    const item = await this.findItem(userId, itemId);
     await this.items.remove(item);
   }
 
-  /** Charge un item en garantissant l'ownership (semaine de l'utilisateur). */
+  /**
+   * Charge un item en garantissant l'ownership en une requête : la jointure sur
+   * `plan.user_id` suffit, inutile de charger le plan et ses relations eager.
+   */
   private async findItem(
     userId: string,
-    weekId: string,
     itemId: string,
   ): Promise<ShoppingListItem> {
-    await this.weeks.findOne(userId, weekId);
-    const item = await this.items.findOne({ where: { id: itemId, weekId } });
+    const item = await this.items.findOne({
+      where: { id: itemId, plan: { userId } },
+    });
     if (!item) {
       throw new NotFoundException('Item introuvable');
     }
@@ -155,14 +151,14 @@ export class ShoppingListService {
   }
 
   /** Lit la liste matérialisée triée par nom (fr, insensible à la casse). */
-  private async read(week: Week): Promise<ShoppingListDto> {
-    const items = await this.items.find({ where: { weekId: week.id } });
+  private async read(plan: Plan): Promise<ShoppingListDto> {
+    const items = await this.items.find({ where: { planId: plan.id } });
     items.sort((a, b) =>
       a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
     );
     return new ShoppingListDto(
-      week.id,
-      week.startDate,
+      plan.id,
+      plan.startDate,
       items.map((item) => new ShoppingListItemDto(item)),
     );
   }
@@ -174,14 +170,14 @@ export class ShoppingListService {
    * sinon on ne touche rien. Aucune mise à jour de quantité/nom, aucune
    * suppression d'orphelin — la liste appartient à l'utilisateur.
    */
-  private async syncDerived(week: Week): Promise<void> {
-    const derived = this.computeDerived(week);
+  private async syncDerived(plan: Plan): Promise<void> {
+    const derived = this.computeDerived(plan);
     if (derived.length === 0) {
       return;
     }
     await this.items.manager.transaction(async (manager) => {
       const repo = manager.getRepository(ShoppingListItem);
-      const existing = await repo.find({ where: { weekId: week.id } });
+      const existing = await repo.find({ where: { planId: plan.id } });
       const existingKeys = new Set(
         existing.map((item) => this.keyOf(item.ingredientId, item.unit)),
       );
@@ -192,7 +188,7 @@ export class ShoppingListService {
         )
         .map((line) =>
           repo.create({
-            weekId: week.id,
+            planId: plan.id,
             source: ShoppingItemSource.DERIVED,
             ingredientId: line.ingredientId,
             name: line.name,
@@ -212,12 +208,12 @@ export class ShoppingListService {
    * Agrège les MealIngredient des créneaux assignés (quantité × portions),
    * groupés par ingrédient + unité, quantité arrondie à 2 décimales.
    */
-  private computeDerived(week: Week): DerivedLine[] {
+  private computeDerived(plan: Plan): DerivedLine[] {
     // ponytail: un repas placé en dîner J + déjeuner J+1 (restes) est compté 2×.
     // Dédupliquer les restes demanderait de détecter les chaînes dîner->déjeuner,
     // fragile — à trancher si le sur-achat devient gênant.
     const byKey = new Map<string, DerivedLine>();
-    for (const slot of week.slots) {
+    for (const slot of plan.slots) {
       if (!slot.meal) {
         continue;
       }
