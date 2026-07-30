@@ -39,18 +39,16 @@ export class ShoppingListItemDto {
 
 export class ShoppingListDto {
   @ApiProperty()
-  weekId: string;
+  planId: string;
 
-  @ApiProperty({
-    description: 'Début de semaine = jour de courses (YYYY-MM-DD)',
-  })
+  @ApiProperty({ description: 'Premier jour du plan (YYYY-MM-DD)' })
   startDate: string;
 
   @ApiProperty({ type: [ShoppingListItemDto] })
   items: ShoppingListItemDto[];
 
-  constructor(weekId: string, startDate: string, items: ShoppingListItemDto[]) {
-    this.weekId = weekId;
+  constructor(planId: string, startDate: string, items: ShoppingListItemDto[]) {
+    this.planId = planId;
     this.startDate = startDate;
     this.items = items;
   }

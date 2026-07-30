@@ -2,35 +2,44 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   Column,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { Meal } from '../../meals/entities/meal.entity';
-import { Week } from './week.entity';
+import { Plan } from './plan.entity';
 
 export enum MealSlot {
   LUNCH = 'LUNCH',
   DINNER = 'DINNER',
 }
 
-/** Un créneau (midi ou soir d'un jour) d'une semaine, repas optionnel. */
-@Entity('week_slots')
-export class WeekSlot {
+/** Un créneau (midi ou soir d'un jour du plan), repas optionnel. */
+@Entity('plan_slots')
+@Unique('UQ_plan_slots_plan_day_slot', ['planId', 'dayIndex', 'slot'])
+export class PlanSlot {
   @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Week, (week) => week.slots, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'week_id' })
-  week!: Week;
+  @ManyToOne(() => Plan, (plan) => plan.slots, { onDelete: 'CASCADE' })
+  @JoinColumn({
+    name: 'plan_id',
+    foreignKeyConstraintName: 'FK_plan_slots_plan',
+  })
+  plan!: Plan;
 
-  @Column({ name: 'week_id' })
-  weekId!: string;
+  @Index('IDX_plan_slots_plan')
+  @Column({ name: 'plan_id' })
+  planId!: string;
 
-  @ApiProperty()
-  @Column({ type: 'date' })
-  date!: string;
+  @ApiProperty({
+    description: 'Rang du jour dans le plan : 0 = premier jour.',
+  })
+  @Column({ name: 'day_index', type: 'smallint' })
+  dayIndex!: number;
 
   @ApiProperty({ enum: MealSlot })
   @Column({ type: 'enum', enum: MealSlot })
@@ -42,7 +51,10 @@ export class WeekSlot {
 
   @ApiProperty({ type: () => Meal, nullable: true })
   @ManyToOne(() => Meal, { eager: true, nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'meal_id' })
+  @JoinColumn({
+    name: 'meal_id',
+    foreignKeyConstraintName: 'FK_plan_slots_meal',
+  })
   meal?: Meal | null;
 
   @ApiProperty()

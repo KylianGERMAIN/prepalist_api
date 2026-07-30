@@ -35,16 +35,19 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
 - **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
   CRUD `meals` (scopé user, filtres favorite/tag/name, `POST /:id/cooked`),
   catalogue `ingredients` (recherche ILike).
-- **Phase 2** — semaine : `Week` / `WeekSlot`, `POST /weeks` (14 créneaux),
-  `GET /weeks/current`, `POST /weeks/:id/generate` (génération pondérée
-  favori/fraîcheur + règle des restes), `PATCH /weeks/:id/slots/:slotId`.
-- **Phase 3** — liste de courses : `GET /weeks/:id/shopping-list`, agrégation
-  dérivée (quantité × portions, groupée par ingrédient + unité). Pas de table.
-- **Phase 5** — rappel hebdo : cron (`@nestjs/schedule`, dimanche 18h) qui
-  rappelle aux utilisateurs sans semaine planifiée de composer la semaine à venir.
-  Livraison par log pour l'instant (canal email/push à brancher).
+- **Phase 2** — plan de repas : `Plan` / `PlanSlot`, un seul plan par utilisateur
+  créé à la volée sur `GET /plan` (`dayCount` jours × midi/soir), créneaux rangés
+  par `dayIndex` et non par date. `POST /plan/generate` (génération pondérée
+  favori/fraîcheur + règle des restes), `PATCH /plan/slots/:slotId`,
+  `DELETE /plan/slots` (vide les créneaux et les items dérivés, réancre
+  `startDate` sur le jour de courses).
+- **Phase 3** — liste de courses : `GET /plan/shopping-list`, table matérialisée
+  `shopping_list_items`, synchronisation explicite `POST /plan/shopping-list/sync`
+  insert-only, CRUD des items par `itemId`.
 
-Phase 4 (capture IA) écartée volontairement.
+Phase 4 (capture IA) écartée volontairement. Phase 5 (rappel hebdo par cron)
+retirée : la livraison n'était qu'un log, et « pas encore planifié » n'a plus de
+sens depuis que le plan est créé automatiquement.
 
 ## Déploiement
 

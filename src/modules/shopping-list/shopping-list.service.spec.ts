@@ -15,10 +15,11 @@ const mi = (
   ingredient: { name },
 });
 
-const week = (slots: unknown[]) => ({
-  id: 'w1',
+const plan = (slots: unknown[]) => ({
+  id: 'p1',
   userId: 'u1',
   startDate: '2024-07-01',
+  dayCount: 7,
   slots,
 });
 
@@ -31,7 +32,7 @@ const derivedItem = (
   checked = false,
 ) => ({
   id,
-  weekId: 'w1',
+  planId: 'p1',
   source: ShoppingItemSource.DERIVED,
   ingredientId,
   unit,
@@ -42,7 +43,7 @@ const derivedItem = (
 
 describe('ShoppingListService', () => {
   let service: ShoppingListService;
-  let weeks: { findOne: jest.Mock };
+  let planService: { ensureForUser: jest.Mock };
   let txRepo: {
     find: jest.Mock;
     create: jest.Mock;
@@ -60,7 +61,7 @@ describe('ShoppingListService', () => {
   };
 
   beforeEach(() => {
-    weeks = { findOne: jest.fn() };
+    planService = { ensureForUser: jest.fn() };
     txRepo = {
       find: jest.fn().mockResolvedValue([]),
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
@@ -81,13 +82,13 @@ describe('ShoppingListService', () => {
         ),
       },
     };
-    service = new ShoppingListService(items as never, weeks as never);
+    service = new ShoppingListService(items as never, planService as never);
   });
 
-  describe('forWeek (lazy init)', () => {
+  describe('forPlan (lazy init)', () => {
     it('syncs when the list is entirely empty, then reads', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -95,16 +96,16 @@ describe('ShoppingListService', () => {
         ]),
       );
       items.count.mockResolvedValue(0);
-      await service.forWeek('u1', 'w1');
-      expect(items.count).toHaveBeenCalledWith({ where: { weekId: 'w1' } });
+      await service.forPlan('u1');
+      expect(items.count).toHaveBeenCalledWith({ where: { planId: 'p1' } });
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
       expect(txRepo.create).toHaveBeenCalled();
       expect(items.find).toHaveBeenCalled();
     });
 
     it('does not sync when the list already holds items (e.g. a manual one)', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -112,33 +113,31 @@ describe('ShoppingListService', () => {
         ]),
       );
       items.count.mockResolvedValue(1);
-      await service.forWeek('u1', 'w1');
+      await service.forPlan('u1');
       expect(items.manager.transaction).not.toHaveBeenCalled();
     });
 
-    it('propagates the 404 from an unowned week', async () => {
-      weeks.findOne.mockRejectedValue(new NotFoundException());
-      await expect(service.forWeek('u1', 'w1')).rejects.toThrow(
-        NotFoundException,
-      );
+    it('propagates a failure raised while resolving the plan', async () => {
+      planService.ensureForUser.mockRejectedValue(new Error('db down'));
+      await expect(service.forPlan('u1')).rejects.toThrow('db down');
     });
 
     it('returns items sorted by name', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
+      planService.ensureForUser.mockResolvedValue(plan([]));
       items.count.mockResolvedValue(2);
       items.find.mockResolvedValue([
         derivedItem('b', 'i2', 'g', 'Tomate', 250),
         derivedItem('a', 'i1', 'g', 'Pates', 240),
       ]);
-      const res = await service.forWeek('u1', 'w1');
+      const res = await service.forPlan('u1');
       expect(res.items.map((i) => i.name)).toEqual(['Pates', 'Tomate']);
     });
   });
 
   describe('sync (insert-only)', () => {
     it('inserts only the ingredients that are absent', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: {
@@ -155,7 +154,7 @@ describe('ShoppingListService', () => {
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       ]);
 
-      await service.sync('u1', 'w1');
+      await service.sync('u1');
 
       expect(txRepo.create).toHaveBeenCalledTimes(1);
       expect(txRepo.create).toHaveBeenCalledWith(
@@ -170,8 +169,8 @@ describe('ShoppingListService', () => {
     });
 
     it('does not touch the quantity of an existing item edited by the user', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -183,15 +182,15 @@ describe('ShoppingListService', () => {
         derivedItem('it1', 'i1', 'g', 'Tomate', 999),
       ]);
 
-      await service.sync('u1', 'w1');
+      await service.sync('u1');
 
       expect(txRepo.create).not.toHaveBeenCalled();
       expect(txRepo.save).not.toHaveBeenCalled();
     });
 
     it('never touches checked nor manual items', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -201,7 +200,7 @@ describe('ShoppingListService', () => {
       const checkedDerived = derivedItem('it1', 'i1', 'g', 'Tomate', 250, true);
       const manual = {
         id: 'itM',
-        weekId: 'w1',
+        planId: 'p1',
         source: ShoppingItemSource.MANUAL,
         ingredientId: null,
         unit: 'lot',
@@ -211,7 +210,7 @@ describe('ShoppingListService', () => {
       };
       txRepo.find.mockResolvedValue([checkedDerived, manual]);
 
-      await service.sync('u1', 'w1');
+      await service.sync('u1');
 
       expect(txRepo.create).not.toHaveBeenCalled();
       expect(txRepo.save).not.toHaveBeenCalled();
@@ -219,8 +218,8 @@ describe('ShoppingListService', () => {
     });
 
     it('is a no-op when the meals bring no new ingredient', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -231,27 +230,27 @@ describe('ShoppingListService', () => {
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       ]);
 
-      await service.sync('u1', 'w1');
+      await service.sync('u1');
 
       expect(txRepo.save).not.toHaveBeenCalled();
     });
 
     it('compares against all current items, not only DERIVED', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
           },
         ]),
       );
-      await service.sync('u1', 'w1');
-      expect(txRepo.find).toHaveBeenCalledWith({ where: { weekId: 'w1' } });
+      await service.sync('u1');
+      expect(txRepo.find).toHaveBeenCalledWith({ where: { planId: 'p1' } });
     });
 
     it('propagates a write failure so the transaction rolls back', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           {
             servings: 1,
             meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
@@ -261,19 +260,19 @@ describe('ShoppingListService', () => {
       txRepo.find.mockResolvedValue([]);
       txRepo.save.mockRejectedValue(new Error('write failed'));
 
-      await expect(service.sync('u1', 'w1')).rejects.toThrow('write failed');
+      await expect(service.sync('u1')).rejects.toThrow('write failed');
     });
 
     it('aggregates by ingredient + unit scaled by servings, rounded to 2 decimals', async () => {
-      weeks.findOne.mockResolvedValue(
-        week([
+      planService.ensureForUser.mockResolvedValue(
+        plan([
           { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.1)] } },
           { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.2)] } },
         ]),
       );
       txRepo.find.mockResolvedValue([]);
 
-      await service.sync('u1', 'w1');
+      await service.sync('u1');
 
       expect(txRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ quantity: 0.3 }),
@@ -283,8 +282,8 @@ describe('ShoppingListService', () => {
 
   describe('addItem', () => {
     it('creates a MANUAL item without ingredient', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
-      await service.addItem('u1', 'w1', {
+      planService.ensureForUser.mockResolvedValue(plan([]));
+      await service.addItem('u1', {
         name: 'Éponges',
         quantity: 2,
         unit: 'lot',
@@ -304,22 +303,20 @@ describe('ShoppingListService', () => {
 
   describe('updateItem', () => {
     it('toggles checked on a DERIVED item', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250, false),
       );
-      const res = await service.updateItem('u1', 'w1', 'it1', {
+      const res = await service.updateItem('u1', 'it1', {
         checked: true,
       });
       expect(res.checked).toBe(true);
     });
 
     it('allows name/quantity/unit edits on a DERIVED item', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
-      const res = await service.updateItem('u1', 'w1', 'it1', {
+      const res = await service.updateItem('u1', 'it1', {
         name: 'Tomates cerises',
         quantity: 500,
         unit: 'kg',
@@ -330,10 +327,9 @@ describe('ShoppingListService', () => {
     });
 
     it('allows content edits on a MANUAL item', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
       items.findOne.mockResolvedValue({
         id: 'it9',
-        weekId: 'w1',
+        planId: 'p1',
         source: ShoppingItemSource.MANUAL,
         ingredientId: null,
         unit: null,
@@ -341,7 +337,7 @@ describe('ShoppingListService', () => {
         quantity: null,
         checked: false,
       });
-      const res = await service.updateItem('u1', 'w1', 'it9', {
+      const res = await service.updateItem('u1', 'it9', {
         name: 'Éponges (x2)',
         quantity: 2,
       });
@@ -349,16 +345,26 @@ describe('ShoppingListService', () => {
       expect(res.quantity).toBe(2);
     });
 
-    it('404s when the item does not belong to the week', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
+    it('404s when the item does not belong to the user', async () => {
       items.findOne.mockResolvedValue(null);
       await expect(
-        service.updateItem('u1', 'w1', 'nope', { checked: true }),
+        service.updateItem('u1', 'nope', { checked: true }),
       ).rejects.toThrow(NotFoundException);
     });
 
+    // Verrouille la clause elle-même : sans `plan: { userId }`, n'importe quel
+    // itemId deviendrait éditable, et le test 404 ci-dessus resterait vert.
+    it('scopes the lookup to the caller via the plan relation', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await service.updateItem('u1', 'it1', { checked: true });
+      expect(items.findOne).toHaveBeenCalledWith({
+        where: { id: 'it1', plan: { userId: 'u1' } },
+      });
+    });
+
     it('maps a unique-index violation (23505) to a 409', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
@@ -368,18 +374,35 @@ describe('ShoppingListService', () => {
         } as unknown as Error),
       );
       await expect(
-        service.updateItem('u1', 'w1', 'it1', { unit: 'kg' }),
+        service.updateItem('u1', 'it1', { unit: 'kg' }),
       ).rejects.toThrow(ConflictException);
     });
   });
 
   describe('removeItem', () => {
     it('removes an owned item', async () => {
-      weeks.findOne.mockResolvedValue(week([]));
       const item = derivedItem('it1', 'i1', 'g', 'Tomate', 250);
       items.findOne.mockResolvedValue(item);
-      await service.removeItem('u1', 'w1', 'it1');
+      await service.removeItem('u1', 'it1');
       expect(items.remove).toHaveBeenCalledWith(item);
+    });
+
+    it('scopes the lookup to the caller via the plan relation', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await service.removeItem('u1', 'it1');
+      expect(items.findOne).toHaveBeenCalledWith({
+        where: { id: 'it1', plan: { userId: 'u1' } },
+      });
+    });
+
+    it('404s when the item does not belong to the user', async () => {
+      items.findOne.mockResolvedValue(null);
+      await expect(service.removeItem('u1', 'nope')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(items.remove).not.toHaveBeenCalled();
     });
   });
 });

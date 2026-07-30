@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { numericTransformer } from '../../../common/transformers/numeric.transformer';
 import { Ingredient } from '../../ingredients/entities/ingredient.entity';
-import { Week } from '../../weeks/entities/week.entity';
+import { Plan } from '../../plan/entities/plan.entity';
 
 export enum ShoppingItemSource {
   DERIVED = 'DERIVED',
@@ -18,30 +18,40 @@ export enum ShoppingItemSource {
 }
 
 /**
- * Item matérialisé de la liste de courses d'une semaine. Un item DERIVED est
+ * Item matérialisé de la liste de courses du plan. Un item DERIVED est
  * (re)calculé depuis les plats par `sync` ; un item MANUAL est saisi par
  * l'utilisateur et jamais touché par `sync`.
  */
 @Entity('shopping_list_items')
+@Index('UQ_shopping_items_derived', ['planId', 'ingredientId', 'unit'], {
+  unique: true,
+  where: `source = 'DERIVED'::shopping_list_items_source_enum`,
+})
 export class ShoppingListItem {
   @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Week, { onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'week_id' })
-  week?: Week;
+  @ManyToOne(() => Plan, { onDelete: 'CASCADE' })
+  @JoinColumn({
+    name: 'plan_id',
+    foreignKeyConstraintName: 'FK_shopping_items_plan',
+  })
+  plan?: Plan;
 
-  @Index()
-  @Column({ name: 'week_id' })
-  weekId!: string;
+  @Index('IDX_shopping_items_plan')
+  @Column({ name: 'plan_id' })
+  planId!: string;
 
   @ApiProperty({ enum: ShoppingItemSource })
   @Column({ type: 'enum', enum: ShoppingItemSource })
   source!: ShoppingItemSource;
 
   @ManyToOne(() => Ingredient, { nullable: true, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'ingredient_id' })
+  @JoinColumn({
+    name: 'ingredient_id',
+    foreignKeyConstraintName: 'FK_shopping_items_ingredient',
+  })
   ingredient?: Ingredient | null;
 
   @ApiProperty({ type: String, nullable: true })
