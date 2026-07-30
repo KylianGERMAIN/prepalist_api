@@ -34,6 +34,15 @@ describe('MealsService', () => {
 
   it('create builds a meal with validated ingredients', async () => {
     ingredients.find.mockResolvedValue([{ id: 'i1' }, { id: 'i2' }]);
+    // create relit après save : la réponse doit avoir la forme du GET, avec la
+    // relation `ingredient` hydratée.
+    meals.findOne.mockResolvedValue({
+      id: 'm1',
+      name: 'Curry',
+      ingredients: [
+        { ingredientId: 'i1', ingredient: { name: 'Curry en poudre' } },
+      ],
+    });
     const meal = await service.create({
       name: 'Curry',
       ingredients: [
@@ -41,8 +50,9 @@ describe('MealsService', () => {
         { ingredientId: 'i2', quantity: 2, unit: 'g' },
       ],
     });
-    expect(meal.name).toBe('Curry');
     expect(meals.save).toHaveBeenCalled();
+    expect(meals.findOne).toHaveBeenCalledWith({ where: { id: 'm1' } });
+    expect(meal.ingredients[0].ingredient.name).toBe('Curry en poudre');
   });
 
   it('create rejects an unknown ingredient', async () => {
