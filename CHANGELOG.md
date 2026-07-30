@@ -5,28 +5,6 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
-## [Non publié]
-
-### Modifié
-
-- **BREAKING — le planning n'est plus identifié par sa date.** `weeks` / `week_slots` deviennent `plans` / `plan_slots` : un seul plan par utilisateur (`UNIQUE (user_id)`), créé à la volée au premier `GET /plan`, dont les créneaux sont rangés par `day_index` au lieu d'une date calendaire. `start_date` subsiste comme simple ancre d'affichage — il libelle les jours et situe le jour courant, mais plus rien ne cherche ni ne crée un plan par date. Les créneaux deviennent symétriques : `day_count` jours × (midi, soir), jour 0 = jour de courses, midi inclus.
-- **BREAKING — les routes perdent leur identifiant de semaine.** `GET /weeks/current`, `GET /weeks?startDate=`, `POST /weeks`, `POST /weeks/:id/generate`, `PATCH /weeks/:id/slots/:slotId` et toutes les routes `/weeks/:id/shopping-list/*` sont remplacées par leurs équivalents sous `/plan`, sans `:id` : le plan est une ressource singleton résolue depuis le JWT.
-- **BREAKING — perte des données de planification.** La migration supprime et recrée `weeks`, `week_slots` et `shopping_list_items` : les plannings et listes de courses existants sont perdus. `users`, `meals`, `meal_ingredients` et `ingredients` ne sont pas touchés. À passer entre deux cycles de courses, pas au milieu.
-- **`shoppingDay` ne redéfinit plus rétroactivement les bornes d'un plan existant.** Il ancre le `start_date` du prochain plan créé, et le réancrage a lieu au vidage (`DELETE /plan/slots`). Changer le réglage n'orpheline donc plus rien — ce qui ferme le défaut où déplacer le jour de courses rendait la semaine en cours inatteignable.
-
-### Ajouté
-
-- **`DELETE /plan/slots`** : vide tous les créneaux, supprime les items dérivés de la liste de courses et réancre `start_date`. Les items ajoutés à la main sont conservés.
-
-### Corrigé
-
-- **Appartenance des items de liste vérifiée en une requête** : la jointure sur `plan.user_id` remplace le chargement complet du plan et de ses relations eager.
-- **Index, contraintes d'unicité et clés étrangères déclarés dans les entités** pour les trois tables recréées, afin que `migration:generate` ne propose plus de les renommer.
-
-### Retiré
-
-- **Cron de rappel hebdo** (`@nestjs/schedule`, dimanche 18h) : la livraison n'était qu'une ligne de log, et sa définition de « semaine non planifiée » n'a plus de sens depuis que le plan est créé automatiquement.
-
 ## [0.3.1] - 2026-07-29
 
 ### Corrigé
