@@ -1,4 +1,4 @@
-import { addDays, lastWeekdayOnOrBefore, today } from './plan-dates';
+import { lastWeekdayOnOrBefore, today } from './plan-dates';
 
 describe('plan-dates', () => {
   describe('today', () => {
@@ -20,18 +20,6 @@ describe('plan-dates', () => {
 
     it('reste en UTC si on le lui demande explicitement', () => {
       expect(today(new Date('2026-07-29T22:30:00Z'), 'UTC')).toBe('2026-07-29');
-    });
-  });
-
-  describe('addDays', () => {
-    it('passe la fin de mois et la fin d’année', () => {
-      expect(addDays('2026-01-31', 1)).toBe('2026-02-01');
-      expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
-      expect(addDays('2027-01-01', -1)).toBe('2026-12-31');
-    });
-
-    it('gère une année bissextile', () => {
-      expect(addDays('2028-02-28', 1)).toBe('2028-02-29');
     });
   });
 

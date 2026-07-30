@@ -15,6 +15,11 @@ import {
   ShoppingListItem,
 } from './entities/shopping-list-item.entity';
 
+/** Violation d'unicité Postgres (`unique_violation`). */
+function isUniqueViolation(err: unknown): boolean {
+  return err instanceof QueryFailedError && err.driverError?.code === '23505';
+}
+
 /** Ligne dérivée calculée depuis les plats, avant matérialisation. */
 interface DerivedLine {
   ingredientId: string;
@@ -44,11 +49,16 @@ export class ShoppingListService {
     // via l'UI (la page fait toujours un GET d'abord).
     const count = await this.items.count({ where: { planId: plan.id } });
     if (count === 0) {
-      // ponytail: deux GET concurrents sur un plan vide lanceraient deux sync ->
-      // l'index unique partiel fait échouer le second (500). Acceptable en app
-      // mono-utilisateur ; sous charge, avaler le conflit d'unicité ou poser un
-      // verrou advisory sur planId.
-      await this.syncDerived(plan);
+      try {
+        await this.syncDerived(plan);
+      } catch (err) {
+        // Deux GET concurrents sur un plan vide lancent deux sync : l'index
+        // unique partiel fait échouer le second. Le premier a déjà écrit ce
+        // qu'il fallait, donc on relit au lieu de remonter un 500.
+        if (!isUniqueViolation(err)) {
+          throw err;
+        }
+      }
     }
     return this.read(plan);
   }
@@ -115,10 +125,7 @@ export class ShoppingListService {
       // Édition d'un DERIVED amenant sa clé (ingredientId, unit) sur celle d'un
       // autre dérivé -> collision sur l'index unique partiel. On refuse en 409
       // plutôt que de crasher en 500 ; le verrouillage de l'unité est assumé absent.
-      if (
-        err instanceof QueryFailedError &&
-        err.driverError?.code === '23505'
-      ) {
+      if (isUniqueViolation(err)) {
         throw new ConflictException(
           'Un item dérivé identique (ingrédient + unité) existe déjà',
         );

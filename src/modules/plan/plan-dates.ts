@@ -14,13 +14,6 @@ export function today(now = new Date(), timeZone = APP_TIME_ZONE): string {
   }).format(now);
 }
 
-/** Ajoute `n` jours à une date `YYYY-MM-DD` et renvoie `YYYY-MM-DD`. */
-export function addDays(isoDate: string, n: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-}
-
 /**
  * Dernier `weekday` (0 = dimanche … 6 = samedi) à `isoDate` ou avant.
  * Arithmétique en UTC pur : on ne manipule que la date calendaire, donc insensible
