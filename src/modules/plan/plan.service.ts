@@ -6,7 +6,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
 import { Meal } from '../meals/entities/meal.entity';
-import { ShoppingListItem } from '../shopping-list/entities/shopping-list-item.entity';
+import {
+  ShoppingItemSource,
+  ShoppingListItem,
+} from '../shopping-list/entities/shopping-list-item.entity';
 import { UsersService } from '../users/users.service';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
@@ -153,16 +156,20 @@ export class PlanService {
   }
 
   /**
-   * Vide le plan : tous les créneaux repassent à vide et la liste de courses est
-   * purgée. Destructif et sans retour arrière — l'archivage viendra plus tard.
+   * Vide le plan : tous les créneaux repassent à vide et les items **dérivés** de
+   * la liste sont supprimés. Les items MANUAL survivent — ils n'ont jamais été
+   * déduits des plats, rien dans le plan ne les justifie ni ne les périme.
    *
-   * Purge la liste ici plutôt que de laisser `sync` s'en charger : `sync` est
-   * insert-only par conception, il ne supprime jamais un item existant.
+   * Purge ici plutôt que dans `sync`, qui est insert-only par conception et ne
+   * supprime jamais un item existant.
    */
   async clearSlots(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
     await this.slots.update({ planId: plan.id }, { mealId: null });
-    await this.items.delete({ planId: plan.id });
+    await this.items.delete({
+      planId: plan.id,
+      source: ShoppingItemSource.DERIVED,
+    });
     return this.ensureForUser(userId);
   }
 

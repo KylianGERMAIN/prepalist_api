@@ -178,14 +178,22 @@ describe('PlanService', () => {
   });
 
   describe('clearSlots', () => {
-    it('vide les repas du plan et purge la liste de courses', async () => {
+    it('vide les repas du plan', async () => {
       plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
       await service.clearSlots('u1');
       expect(slots.update).toHaveBeenCalledWith(
         { planId: 'p1' },
         { mealId: null },
       );
-      expect(items.delete).toHaveBeenCalledWith({ planId: 'p1' });
+    });
+
+    it('ne supprime que les items dérivés, jamais les manuels', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      await service.clearSlots('u1');
+      expect(items.delete).toHaveBeenCalledWith({
+        planId: 'p1',
+        source: 'DERIVED',
+      });
     });
   });
 });

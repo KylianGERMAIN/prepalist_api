@@ -56,7 +56,8 @@ export class PlanController {
 
   @Delete('slots')
   @ApiOperation({
-    summary: 'Vide les créneaux du plan et purge la liste de courses',
+    summary:
+      'Vide les créneaux du plan et les items dérivés de la liste (les items manuels sont conservés)',
   })
   @ApiOkResponse({ type: Plan })
   clear(@CurrentUser('id') userId: string) {
