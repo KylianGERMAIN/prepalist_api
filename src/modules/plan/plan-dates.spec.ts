@@ -5,6 +5,22 @@ describe('plan-dates', () => {
     it('renvoie une date calendaire au format YYYY-MM-DD', () => {
       expect(today()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
+
+    // La raison d'être de la fonction : un serveur UTC ne doit pas renvoyer la
+    // veille pour un utilisateur déjà passé à minuit à Paris.
+    it('ancre sur Europe/Paris et non sur UTC (heure d’été, UTC+2)', () => {
+      expect(today(new Date('2026-07-29T22:30:00Z'))).toBe('2026-07-30');
+      expect(today(new Date('2026-07-29T21:30:00Z'))).toBe('2026-07-29');
+    });
+
+    it('ancre sur Europe/Paris et non sur UTC (heure d’hiver, UTC+1)', () => {
+      expect(today(new Date('2026-01-14T23:30:00Z'))).toBe('2026-01-15');
+      expect(today(new Date('2026-01-14T22:30:00Z'))).toBe('2026-01-14');
+    });
+
+    it('reste en UTC si on le lui demande explicitement', () => {
+      expect(today(new Date('2026-07-29T22:30:00Z'), 'UTC')).toBe('2026-07-29');
+    });
   });
 
   describe('addDays', () => {

@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, QueryFailedError, Repository } from 'typeorm';
 import { Meal } from '../meals/entities/meal.entity';
 import {
   ShoppingItemSource,
@@ -56,14 +56,37 @@ export class PlanService {
       return existing;
     }
 
-    const { shoppingDay } = await this.users.findById(userId);
     const plan = this.plans.create({
       userId,
-      startDate: lastWeekdayOnOrBefore(today(), shoppingDay),
+      startDate: await this.anchorFor(userId),
       dayCount: DEFAULT_DAY_COUNT,
       slots: this.buildSlots(DEFAULT_DAY_COUNT),
     });
-    return this.plans.save(plan);
+
+    try {
+      return await this.plans.save(plan);
+    } catch (err) {
+      // Course sur le premier accès : deux requêtes concurrentes passent le
+      // findOne avant l'insert. L'unicité (user_id) fait échouer la seconde en
+      // 23505 ; on relit le plan gagnant plutôt que de remonter un 500.
+      if (this.isUniqueViolation(err)) {
+        const winner = await this.plans.findOne({ where: { userId } });
+        if (winner) {
+          return winner;
+        }
+      }
+      throw err;
+    }
+  }
+
+  /** Premier jour à retenir pour un plan neuf : dernier jour de courses passé. */
+  private async anchorFor(userId: string): Promise<string> {
+    const { shoppingDay } = await this.users.findById(userId);
+    return lastWeekdayOnOrBefore(today(), shoppingDay);
+  }
+
+  private isUniqueViolation(err: unknown): boolean {
+    return err instanceof QueryFailedError && err.driverError?.code === '23505';
   }
 
   /**
@@ -156,20 +179,34 @@ export class PlanService {
   }
 
   /**
-   * Vide le plan : tous les créneaux repassent à vide et les items **dérivés** de
-   * la liste sont supprimés. Les items MANUAL survivent — ils n'ont jamais été
-   * déduits des plats, rien dans le plan ne les justifie ni ne les périme.
+   * Vide le plan : tous les créneaux repassent à vide, les items **dérivés** de la
+   * liste sont supprimés et `startDate` est réancré sur le dernier jour de
+   * courses. Les items MANUAL survivent — ils n'ont jamais été déduits des plats,
+   * rien dans le plan ne les justifie ni ne les périme.
    *
    * Purge ici plutôt que dans `sync`, qui est insert-only par conception et ne
    * supprime jamais un item existant.
+   *
+   * Le réancrage a lieu ici et nulle part ailleurs : c'est le seul geste qui
+   * marque le début d'un nouveau cycle, donc le seul moment où l'ancre
+   * d'affichage doit bouger. Un GET ne doit rien écrire.
    */
   async clearSlots(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
-    await this.slots.update({ planId: plan.id }, { mealId: null });
-    await this.items.delete({
-      planId: plan.id,
-      source: ShoppingItemSource.DERIVED,
+    const startDate = await this.anchorFor(userId);
+
+    // Les trois écritures forment un tout : des créneaux vidés avec des dérivés
+    // survivants afficheraient les ingrédients d'un plan qui n'existe plus, et
+    // l'init paresseuse ne rattraperait pas (elle exige une liste vide).
+    await this.plans.manager.transaction(async (manager) => {
+      await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
+      await manager.delete(ShoppingListItem, {
+        planId: plan.id,
+        source: ShoppingItemSource.DERIVED,
+      });
+      await manager.update(Plan, { id: plan.id }, { startDate });
     });
+
     return this.ensureForUser(userId);
   }
 

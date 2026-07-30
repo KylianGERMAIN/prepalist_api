@@ -352,6 +352,18 @@ describe('ShoppingListService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    // Verrouille la clause elle-même : sans `plan: { userId }`, n'importe quel
+    // itemId deviendrait éditable, et le test 404 ci-dessus resterait vert.
+    it('scopes the lookup to the caller via the plan relation', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await service.updateItem('u1', 'it1', { checked: true });
+      expect(items.findOne).toHaveBeenCalledWith({
+        where: { id: 'it1', plan: { userId: 'u1' } },
+      });
+    });
+
     it('maps a unique-index violation (23505) to a 409', async () => {
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
@@ -373,6 +385,24 @@ describe('ShoppingListService', () => {
       items.findOne.mockResolvedValue(item);
       await service.removeItem('u1', 'it1');
       expect(items.remove).toHaveBeenCalledWith(item);
+    });
+
+    it('scopes the lookup to the caller via the plan relation', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await service.removeItem('u1', 'it1');
+      expect(items.findOne).toHaveBeenCalledWith({
+        where: { id: 'it1', plan: { userId: 'u1' } },
+      });
+    });
+
+    it('404s when the item does not belong to the user', async () => {
+      items.findOne.mockResolvedValue(null);
+      await expect(service.removeItem('u1', 'nope')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(items.remove).not.toHaveBeenCalled();
     });
   });
 });

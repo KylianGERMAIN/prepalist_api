@@ -4,14 +4,14 @@ const APP_TIME_ZONE = 'Europe/Paris';
  * Date calendaire du jour (`YYYY-MM-DD`) dans le fuseau de l'app et non en UTC :
  * sur un serveur UTC, un jeudi 00h30 à Paris est encore mercredi en UTC.
  */
-export function today(timeZone = APP_TIME_ZONE): string {
+export function today(now = new Date(), timeZone = APP_TIME_ZONE): string {
   // en-CA formate en YYYY-MM-DD, ce qui évite de recomposer la chaîne à la main.
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(now);
 }
 
 /** Ajoute `n` jours à une date `YYYY-MM-DD` et renvoie `YYYY-MM-DD`. */
