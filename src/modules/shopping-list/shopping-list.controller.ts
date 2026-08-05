@@ -25,67 +25,58 @@ import { ShoppingListService } from './shopping-list.service';
 
 @ApiTags('shopping-list')
 @ApiBearerAuth()
-@Controller('weeks')
+@Controller('plan/shopping-list')
 export class ShoppingListController {
   constructor(private readonly shoppingList: ShoppingListService) {}
 
-  @Get(':id/shopping-list')
+  @Get()
   @ApiOperation({
-    summary: 'Liste de courses matérialisée d’une semaine (init paresseuse)',
+    summary: 'Liste de courses matérialisée du plan (init paresseuse)',
   })
   @ApiOkResponse({ type: ShoppingListDto })
-  forWeek(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.shoppingList.forWeek(userId, id);
+  forPlan(@CurrentUser('id') userId: string) {
+    return this.shoppingList.forPlan(userId);
   }
 
-  @Post(':id/shopping-list/sync')
+  @Post('sync')
   @HttpCode(200)
   @ApiOperation({ summary: 'Resynchronise les items dérivés depuis les plats' })
   @ApiOkResponse({ type: ShoppingListDto })
-  sync(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.shoppingList.sync(userId, id);
+  sync(@CurrentUser('id') userId: string) {
+    return this.shoppingList.sync(userId);
   }
 
-  @Post(':id/shopping-list/items')
+  @Post('items')
   @ApiOperation({ summary: 'Ajoute un item manuel à la liste' })
   @ApiCreatedResponse({ type: ShoppingListItemDto })
   addItem(
     @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: CreateShoppingListItemDto,
   ) {
-    return this.shoppingList.addItem(userId, id, dto);
+    return this.shoppingList.addItem(userId, dto);
   }
 
-  @Patch(':id/shopping-list/items/:itemId')
+  @Patch('items/:itemId')
   @ApiOperation({
     summary: 'Met à jour un item (checked, nom, quantité, unité)',
   })
   @ApiOkResponse({ type: ShoppingListItemDto })
   updateItem(
     @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() dto: UpdateShoppingListItemDto,
   ) {
-    return this.shoppingList.updateItem(userId, id, itemId, dto);
+    return this.shoppingList.updateItem(userId, itemId, dto);
   }
 
-  @Delete(':id/shopping-list/items/:itemId')
+  @Delete('items/:itemId')
   @HttpCode(204)
   @ApiOperation({ summary: 'Supprime un item de la liste' })
   @ApiNoContentResponse()
   removeItem(
     @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
     @Param('itemId', ParseUUIDPipe) itemId: string,
   ) {
-    return this.shoppingList.removeItem(userId, id, itemId);
+    return this.shoppingList.removeItem(userId, itemId);
   }
 }

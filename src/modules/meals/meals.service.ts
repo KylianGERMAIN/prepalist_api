@@ -33,7 +33,11 @@ export class MealsService {
       tags: dto.tags ?? [],
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
-    return this.meals.save(meal);
+    const saved = await this.meals.save(meal);
+    // Relit plutôt que de rendre le résultat du save : les lignes construites par
+    // buildIngredients n'ont pas leur relation `ingredient` (eager) hydratée, la
+    // réponse omettrait donc le nom de l'ingrédient que le GET renvoie.
+    return this.findOne(saved.id);
   }
 
   /** Liste paginée du catalogue de repas (sans ingrédients), avec filtres. */
@@ -80,7 +84,9 @@ export class MealsService {
       meal.ingredients = await this.buildIngredients(dto.ingredients);
     }
 
-    return this.meals.save(meal);
+    await this.meals.save(meal);
+    // Même raison que dans `create` : la réponse doit avoir la forme du GET.
+    return this.findOne(id);
   }
 
   /** Supprime un repas du catalogue (cascade sur les lignes d'ingrédients). */

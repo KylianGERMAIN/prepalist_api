@@ -17,7 +17,15 @@ export class MealIngredient {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Meal, (meal) => meal.ingredients, { onDelete: 'CASCADE' })
+  // orphanedRowAction est ici et non sur le @OneToMany de Meal : TypeORM le lit
+  // sur `relation.inverseRelation`, donc sur ce côté-ci
+  // (OneToManySubjectBuilder.js:159-170). Déclaré côté @OneToMany il reste au
+  // défaut 'nullify', et retirer une ligne d'ingrédient tente un
+  // `UPDATE meal_ingredients SET meal_id = NULL` qui viole le NOT NULL.
+  @ManyToOne(() => Meal, (meal) => meal.ingredients, {
+    onDelete: 'CASCADE',
+    orphanedRowAction: 'delete',
+  })
   @JoinColumn({ name: 'meal_id' })
   meal!: Meal;
 
