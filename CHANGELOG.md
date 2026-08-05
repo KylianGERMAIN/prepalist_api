@@ -5,6 +5,25 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.4.0] - 2026-08-05
+
+### Modifié
+
+- **Planning unique par utilisateur, plus de recherche par date** (cassant) : le planning n'est plus identifié par sa date de début. Il existe un plan par utilisateur, créé vide au premier accès, dont les créneaux sont ordonnés par index de jour et non plus par date calendaire. La date devient un repère d'affichage : `startDate` nomme les jours et situe le jour courant, mais rien ne recherche un plan par date. Les routes `/weeks` et `/weeks/:id/*` disparaissent au profit de `/plan/*` sans identifiant, le plan étant résolu depuis le JWT. Les créneaux deviennent symétriques (jour 0 = jour de courses, déjeuner inclus), ce qui retire les cas particuliers à l'ajout d'un jour. L'appartenance des items de liste de courses est vérifiée par une jointure unique, sans chargement eager.
+- **Migration destructrice** : les plannings et listes de courses existants sont perdus. Les utilisateurs, plats, ingrédients et associations plat-ingrédient sont intacts.
+- **`shoppingDay` n'agit plus rétroactivement** : changer son jour de courses ne redéfinit plus les bornes d'un planning existant, il ancre la date de départ du prochain plan.
+- **Le vidage du planning ne supprime que les items dérivés** de la liste de courses. Les items ajoutés à la main n'ont jamais été déduits des plats, rien dans le plan ne justifie de les faire expirer.
+
+### Supprimé
+
+- **Rappel hebdomadaire (cron)** : sa livraison n'était qu'une couture loguée, et son test « pas encore planifié » n'a plus de sens depuis que le plan est toujours créé à la volée. `@nestjs/schedule` sort des dépendances.
+
+### Corrigé
+
+- **500 à la modification des ingrédients d'un plat enregistré** : Postgres refusait `UPDATE meal_ingredients SET meal_id = NULL` sur une colonne `NOT NULL`. `orphanedRowAction: 'delete'` était posé sur le `@OneToMany` alors que TypeORM le lit sur la relation inverse — l'option paraissait traitée tout en ne faisant rien. La création et la modification rechargent aussi le plat après écriture, pour ne plus omettre l'ingrédient imbriqué que le `GET` renvoie.
+- **500 sur deux premiers accès concurrents** : `GET /plan` et `GET /plan/shopping-list`, rendus par deux composants serveur distincts, pouvaient créer le plan simultanément ; le perdant heurtait la contrainte d'unicité, remontée en 500 faute d'être une exception HTTP. Même défaut sur l'initialisation paresseuse de la liste de courses. La violation d'unicité est désormais absorbée et l'enregistrement gagnant relu.
+- **Vidage partiel du planning** : les trois écritures du vidage étaient indépendantes ; un échec laissait les créneaux vides avec les items dérivés survivants, état dont l'initialisation paresseuse ne pouvait pas se remettre puisqu'elle exige une liste vide. Elles tiennent maintenant dans une seule transaction.
+
 ## [0.3.1] - 2026-07-29
 
 ### Corrigé
