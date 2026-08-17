@@ -12,7 +12,6 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { PlanSlot } from './plan-slot.entity';
 
-/** Plan de repas courant d'un utilisateur : un seul par compte. */
 @Entity('plans')
 export class Plan {
   @ApiProperty()
@@ -29,7 +28,7 @@ export class Plan {
 
   @ApiProperty({
     description:
-      'Premier jour du plan (YYYY-MM-DD). Ancre d’affichage : sert à libeller les jours et à situer le jour courant, jamais à retrouver un plan.',
+      'Premier jour du plan (YYYY-MM-DD). Ancre d’affichage seulement : ne sert jamais à retrouver un plan.',
   })
   @Column({ name: 'start_date', type: 'date' })
   startDate!: string;

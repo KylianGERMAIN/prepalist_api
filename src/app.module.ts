@@ -15,10 +15,7 @@ import { ShoppingListModule } from './modules/shopping-list/shopping-list.module
 import { UsersModule } from './modules/users/users.module';
 import { PlanModule } from './modules/plan/plan.module';
 
-/**
- * Garde fail-fast : en production, refuse de démarrer si une variable critique manque,
- * pour ne pas tourner silencieusement sur les fallbacks de dev (DB/JWT).
- */
+// Fail-fast en prod, pour ne pas tourner en silence sur les fallbacks de dev.
 const REQUIRED_PROD_ENV = [
   'DB_HOST',
   'DB_PORT',

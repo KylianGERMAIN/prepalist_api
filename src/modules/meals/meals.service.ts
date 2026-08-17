@@ -24,7 +24,6 @@ export class MealsService {
     private readonly ingredients: Repository<Ingredient>,
   ) {}
 
-  /** Crée un repas dans le catalogue partagé, avec ses lignes d'ingrédients. */
   async create(dto: CreateMealDto): Promise<Meal> {
     const meal = this.meals.create({
       name: dto.name,
@@ -34,13 +33,12 @@ export class MealsService {
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
     const saved = await this.meals.save(meal);
-    // Relit plutôt que de rendre le résultat du save : les lignes construites par
-    // buildIngredients n'ont pas leur relation `ingredient` (eager) hydratée, la
-    // réponse omettrait donc le nom de l'ingrédient que le GET renvoie.
+    // Relit : les lignes de buildIngredients n'ont pas leur relation `ingredient`
+    // hydratée, la réponse omettrait le nom de l'ingrédient.
     return this.findOne(saved.id);
   }
 
-  /** Liste paginée du catalogue de repas (sans ingrédients), avec filtres. */
+  /** Sans les `ingredients` : le QueryBuilder ignore les relations eager. */
   async findAll(query: MealQueryDto): Promise<PaginatedDto<Meal>> {
     const qb = this.meals.createQueryBuilder('meal');
 
@@ -63,7 +61,6 @@ export class MealsService {
     return new PaginatedDto(items, total, query.page, query.limit);
   }
 
-  /** Récupère un repas du catalogue (ingrédients chargés) ou lève 404. */
   async findOne(id: string): Promise<Meal> {
     const meal = await this.meals.findOne({ where: { id } });
     if (!meal) {
@@ -72,7 +69,7 @@ export class MealsService {
     return meal;
   }
 
-  /** Met à jour un repas ; remplace les ingrédients si la liste est fournie. */
+  /** `dto.ingredients` remplace la liste entière, il ne la complète pas. */
   async update(id: string, dto: UpdateMealDto): Promise<Meal> {
     const meal = await this.findOne(id);
 
@@ -89,17 +86,14 @@ export class MealsService {
     return this.findOne(id);
   }
 
-  /** Supprime un repas du catalogue (cascade sur les lignes d'ingrédients). */
   async remove(id: string): Promise<void> {
     const meal = await this.findOne(id);
     await this.meals.remove(meal);
   }
 
-  /** Marque un repas comme cuisiné : incrément atomique + date la dernière fois. */
   async markCooked(id: string): Promise<Meal> {
     await this.findOne(id); // 404 si absent
-    // Incrément en SQL pour éviter la perte de mise à jour (lost update) et le
-    // rechargement inutile du graphe d'ingrédients par save().
+    // Incrément en SQL et non via save() : évite le lost update.
     await this.meals.update(id, {
       timesCooked: () => '"times_cooked" + 1',
       lastCookedAt: new Date(),
@@ -107,7 +101,6 @@ export class MealsService {
     return this.findOne(id);
   }
 
-  /** Construit les lignes d'ingrédients en validant que tous existent. */
   private async buildIngredients(
     items: MealIngredientDto[],
   ): Promise<MealIngredient[]> {

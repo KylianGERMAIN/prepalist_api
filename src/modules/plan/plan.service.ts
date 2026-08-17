@@ -33,7 +33,6 @@ export class PlanService {
     private readonly users: UsersService,
   ) {}
 
-  /** Créneaux vides d'un plan : `dayCount` jours × (midi, soir). */
   private buildSlots(dayCount: number): PlanSlot[] {
     const slots: PlanSlot[] = [];
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex++) {
@@ -46,10 +45,7 @@ export class PlanService {
     return slots;
   }
 
-  /**
-   * Plan courant de l'utilisateur, créé vide au premier accès. Il n'y a jamais
-   * qu'un plan par compte : aucune date n'est nécessaire pour le retrouver.
-   */
+  /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
     const existing = await this.plans.findOne({ where: { userId } });
     if (existing) {
@@ -66,34 +62,26 @@ export class PlanService {
     try {
       return await this.plans.save(plan);
     } catch (err) {
-      // Course sur le premier accès : deux requêtes concurrentes passent le
-      // findOne avant l'insert. L'unicité (user_id) fait échouer la seconde en
-      // 23505 ; on relit le plan gagnant plutôt que de remonter un 500.
+      // Course au premier accès : deux requêtes passent le findOne avant l'insert,
+      // l'unicité (user_id) fait échouer la seconde.
       if (isUniqueViolation(err)) {
         const winner = await this.plans.findOne({ where: { userId } });
         if (winner) {
           return winner;
         }
-        // Conflit d'unicité mais plus de plan à relire : le compte a disparu
-        // entre les deux (CASCADE). Un 409 décrit la situation, là où le
-        // QueryFailedError brut remonterait un 500 sur un conflit résolu.
+        // Conflit mais plus rien à relire : le compte a disparu entre les deux (CASCADE).
         throw new ConflictException('Plan indisponible, réessaie');
       }
       throw err;
     }
   }
 
-  /** Premier jour à retenir pour un plan neuf : dernier jour de courses passé. */
   private async anchorFor(userId: string): Promise<string> {
     const { shoppingDay } = await this.users.findById(userId);
     return lastWeekdayOnOrBefore(today(), shoppingDay);
   }
 
-  /**
-   * Remplit les créneaux **vides** par tirage pondéré (favori + fraîcheur −
-   * doublon) ; les créneaux déjà assignés (manuellement) sont préservés.
-   * Règle meal-prep : le dîner du jour J peut alimenter le déjeuner du jour J+1.
-   */
+  /** Ne remplit que les créneaux vides : une assignation manuelle n'est jamais écrasée. */
   async generate(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
     const candidates = await this.meals.find();
@@ -107,7 +95,6 @@ export class PlanService {
     const changed: PlanSlot[] = [];
 
     for (const slot of ordered) {
-      // Préserve une assignation existante et la prend en compte (doublons + restes).
       if (slot.mealId) {
         placed.set(slot.mealId, (placed.get(slot.mealId) ?? 0) + 1);
         if (slot.slot === MealSlot.DINNER) {
@@ -134,8 +121,8 @@ export class PlanService {
       changed.push(slot);
     }
 
-    // Persiste uniquement la colonne FK des créneaux modifiés (sans l'objet
-    // relation `meal` chargé en eager, qui sinon écraserait le mealId au save).
+    // La seule colonne FK, sans la relation `meal` chargée en eager : au save elle
+    // écraserait le mealId qu'on vient de poser.
     if (changed.length > 0) {
       await this.slots.save(
         changed.map((s) => ({
@@ -147,7 +134,6 @@ export class PlanService {
     return this.ensureForUser(userId);
   }
 
-  /** Met à jour un créneau (repas / portions) du plan de l'utilisateur. */
   async updateSlot(
     userId: string,
     slotId: string,
@@ -179,26 +165,16 @@ export class PlanService {
   }
 
   /**
-   * Vide le plan : tous les créneaux repassent à vide, les items **dérivés** de la
-   * liste sont supprimés et `startDate` est réancré sur le dernier jour de
-   * courses. Les items MANUAL survivent — ils n'ont jamais été déduits des plats,
-   * rien dans le plan ne les justifie ni ne les périme.
-   *
-   * Purge ici plutôt que dans `sync`, qui est insert-only par conception et ne
-   * supprime jamais un item existant.
-   *
-   * Le réancrage a lieu ici et nulle part ailleurs : c'est le seul geste qui
-   * marque le début d'un nouveau cycle, donc le seul moment où l'ancre doit
-   * bouger. Les GET écrivent (création du plan, init de la liste) mais ne
-   * déplacent jamais l'ancre.
+   * Vide les créneaux et les items DERIVED ; les MANUAL survivent.
+   * Seul geste qui déplace `startDate` — aucun autre appel ne réancre le plan.
    */
   async clearSlots(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
     const startDate = await this.anchorFor(userId);
 
-    // Les trois écritures forment un tout : des créneaux vidés avec des dérivés
-    // survivants afficheraient les ingrédients d'un plan qui n'existe plus, et
-    // l'init paresseuse ne rattraperait pas (elle exige une liste vide).
+    // Atomique : des créneaux vidés avec des dérivés survivants afficheraient les
+    // ingrédients d'un plan disparu, et l'init paresseuse exige une liste vide pour
+    // rattraper.
     await this.plans.manager.transaction(async (manager) => {
       await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
       await manager.delete(ShoppingListItem, {
@@ -211,7 +187,6 @@ export class PlanService {
     return this.ensureForUser(userId);
   }
 
-  /** Ordonne les créneaux : jour croissant, puis midi avant soir. */
   private compareSlots = (a: PlanSlot, b: PlanSlot): number => {
     if (a.dayIndex !== b.dayIndex) {
       return a.dayIndex - b.dayIndex;
@@ -219,7 +194,6 @@ export class PlanService {
     return a.slot === b.slot ? 0 : a.slot === MealSlot.LUNCH ? -1 : 1;
   };
 
-  /** Tirage pondéré : favori + note + fraîcheur, fortement pénalisé si déjà placé. */
   private pickWeighted(meals: Meal[], placed: Map<string, number>): string {
     const weights = meals.map(
       (meal) => this.baseScore(meal) * Math.pow(0.2, placed.get(meal.id) ?? 0),
@@ -236,7 +210,7 @@ export class PlanService {
     return meals[meals.length - 1].id;
   }
 
-  /** Score de base d'une recette (toujours > 0). */
+  /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
   private baseScore(meal: Meal): number {
     const favorite = meal.isFavorite ? 2 : 0;
     const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
@@ -244,7 +218,7 @@ export class PlanService {
     return 1 + favorite + rating + freshness;
   }
 
-  /** Plus la recette n'a pas été cuisinée depuis longtemps, plus elle remonte. */
+  /** Croît avec l'ancienneté. */
   private freshnessScore(lastCookedAt: Date | null): number {
     if (!lastCookedAt) {
       return 2; // jamais cuisinée -> priorité max

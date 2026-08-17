@@ -14,7 +14,6 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-/** Émission et vérification des JWT access / refresh. */
 @Injectable()
 export class TokenService {
   constructor(
@@ -22,7 +21,6 @@ export class TokenService {
     private readonly config: ConfigService,
   ) {}
 
-  /** Émet une paire access + refresh pour un utilisateur. */
   async issueTokens(user: User): Promise<TokenPair> {
     const payload: JwtPayload = {
       sub: user.id,
@@ -42,7 +40,6 @@ export class TokenService {
     return { accessToken, refreshToken };
   }
 
-  /** Vérifie un refresh token et renvoie son payload (lève si invalide/expiré). */
   verifyRefresh(token: string): Promise<JwtPayload> {
     return this.jwt.verifyAsync<JwtPayload>(token, {
       secret: this.config.getOrThrow<string>('JWT_REFRESH_SECRET'),

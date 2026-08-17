@@ -16,7 +16,6 @@ export enum MealSlot {
   DINNER = 'DINNER',
 }
 
-/** Un créneau (midi ou soir d'un jour du plan), repas optionnel. */
 @Entity('plan_slots')
 @Unique('UQ_plan_slots_plan_day_slot', ['planId', 'dayIndex', 'slot'])
 export class PlanSlot {

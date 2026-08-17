@@ -13,8 +13,7 @@ async function bootstrap() {
   app.use(helmet());
   app.use(requestId);
 
-  // CORS : origins via CORS_ORIGINS (liste séparée par des virgules).
-  // Vide -> reflète l'origin (tous), acceptable en local ; à restreindre en prod.
+  // `CORS_ORIGINS` vide reflète l'origin appelante, donc autorise tout le monde.
   const corsOrigins = process.env.CORS_ORIGINS?.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);

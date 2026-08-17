@@ -1,9 +1,6 @@
 import { ValueTransformer } from 'typeorm';
 
-/**
- * Postgres `numeric` revient en `string` côté driver ; on le reconvertit en
- * `number` pour exposer un type propre dans l'API.
- */
+// Le driver Postgres rend `numeric` en `string`.
 export const numericTransformer: ValueTransformer = {
   to: (value?: number | null) => value,
   from: (value?: string | null) =>

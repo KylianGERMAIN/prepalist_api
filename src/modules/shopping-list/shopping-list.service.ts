@@ -17,7 +17,6 @@ import {
   ShoppingListItem,
 } from './entities/shopping-list-item.entity';
 
-/** Ligne dérivée calculée depuis les plats, avant matérialisation. */
 interface DerivedLine {
   ingredientId: string;
   name: string;
@@ -35,31 +34,22 @@ export class ShoppingListService {
     private readonly plan: PlanService,
   ) {}
 
-  /**
-   * Liste de courses matérialisée du plan. Init paresseuse : si aucune ligne
-   * n'existe encore, on lance un `sync` pour peupler la table depuis les plats,
-   * puis on relit — l'utilisateur voit sa liste sans action explicite.
-   */
+  /** Écrit : la première lecture d'un plan vide peuple la table depuis les plats. */
   async forPlan(userId: string): Promise<ShoppingListDto> {
     const plan = await this.plan.ensureForUser(userId);
-    // Init seulement si la liste est totalement vide : compter les DERIVED
-    // créerait un effet falaise (cocher/supprimer le dernier dérivé ré-injecte
-    // tout au prochain GET). Un ajout manuel avant tout GET est inatteignable
-    // via l'UI (la page fait toujours un GET d'abord).
+    // Compter tous les items et pas seulement les DERIVED : sinon cocher ou
+    // supprimer le dernier dérivé ré-injecte toute la liste au prochain GET.
+    // Repose sur l'UI, qui fait toujours un GET avant tout ajout manuel.
     const count = await this.items.count({ where: { planId: plan.id } });
     if (count === 0) {
       try {
         await this.syncDerived(plan);
       } catch (err) {
-        // Deux GET concurrents sur un plan vide lancent deux sync : l'index
-        // unique partiel fait échouer le second. Le premier a déjà écrit ce
-        // qu'il fallait, donc on relit au lieu de remonter un 500.
+        // Deux GET concurrents sur un plan vide lancent deux sync ; l'index unique
+        // partiel fait échouer le second, dont le travail est déjà fait.
         if (!isUniqueViolation(err)) {
           throw err;
         }
-        // Tracé : le cas normal est bénin (le gagnant a déjà écrit, la relecture
-        // voit la liste complète), mais s'il survient pour une autre raison
-        // l'utilisateur reçoit une liste partielle en 200 sans autre indice.
         this.logger.warn(
           `Init concurrente de la liste du plan ${plan.id} : conflit avalé`,
         );
@@ -68,18 +58,12 @@ export class ShoppingListService {
     return this.read(plan);
   }
 
-  /**
-   * Alimente la liste depuis les plats du plan : insère les ingrédients absents
-   * (checked=false) sans jamais modifier ni supprimer les items existants. La
-   * liste appartient à l'utilisateur, les plats ne font que l'enrichir.
-   */
   async sync(userId: string): Promise<ShoppingListDto> {
     const plan = await this.plan.ensureForUser(userId);
     await this.syncDerived(plan);
     return this.read(plan);
   }
 
-  /** Ajoute un item manuel (hors plats) à la liste. */
   async addItem(
     userId: string,
     dto: CreateShoppingListItemDto,
@@ -98,11 +82,7 @@ export class ShoppingListService {
     return new ShoppingListItemDto(saved);
   }
 
-  /**
-   * Met à jour un item : `checked`, `name`, `quantity` et `unit` sont éditables
-   * sur tout item, quelle que soit sa source — la liste appartient à
-   * l'utilisateur. Seul l'ownership est contrôlé.
-   */
+  /** Un item DERIVED est éditable comme un MANUAL : la liste appartient à l'utilisateur. */
   async updateItem(
     userId: string,
     itemId: string,
@@ -127,9 +107,8 @@ export class ShoppingListService {
       const saved = await this.items.save(item);
       return new ShoppingListItemDto(saved);
     } catch (err) {
-      // Édition d'un DERIVED amenant sa clé (ingredientId, unit) sur celle d'un
-      // autre dérivé -> collision sur l'index unique partiel. On refuse en 409
-      // plutôt que de crasher en 500 ; le verrouillage de l'unité est assumé absent.
+      // Éditer un DERIVED peut amener sa clé (ingredientId, unit) sur celle d'un
+      // autre dérivé, et collisionner l'index unique partiel.
       if (isUniqueViolation(err)) {
         throw new ConflictException(
           'Un item dérivé identique (ingrédient + unité) existe déjà',
@@ -139,16 +118,13 @@ export class ShoppingListService {
     }
   }
 
-  /** Supprime un item de la liste. */
   async removeItem(userId: string, itemId: string): Promise<void> {
     const item = await this.findItem(userId, itemId);
     await this.items.remove(item);
   }
 
-  /**
-   * Charge un item en garantissant l'ownership en une requête : la jointure sur
-   * `plan.user_id` suffit, inutile de charger le plan et ses relations eager.
-   */
+  // C'est la clause `plan: { userId }` qui porte l'ownership : la retirer ouvre
+  // l'accès aux items de n'importe quel utilisateur.
   private async findItem(
     userId: string,
     itemId: string,
@@ -162,7 +138,6 @@ export class ShoppingListService {
     return item;
   }
 
-  /** Lit la liste matérialisée triée par nom (fr, insensible à la casse). */
   private async read(plan: Plan): Promise<ShoppingListDto> {
     const items = await this.items.find({ where: { planId: plan.id } });
     items.sort((a, b) =>
@@ -175,13 +150,8 @@ export class ShoppingListService {
     );
   }
 
-  /**
-   * Insert-only des ingrédients manquants : les plats ne font qu'alimenter la
-   * liste, ils ne la pilotent pas. Pour chaque ingrédient agrégé, on insère
-   * (checked=false) s'il n'existe aucun item pour la clé (ingredientId, unit) ;
-   * sinon on ne touche rien. Aucune mise à jour de quantité/nom, aucune
-   * suppression d'orphelin — la liste appartient à l'utilisateur.
-   */
+  // Insert-only : jamais de mise à jour de quantité ni de suppression d'orphelin,
+  // sinon les éditions manuelles de l'utilisateur seraient écrasées.
   private async syncDerived(plan: Plan): Promise<void> {
     const derived = this.computeDerived(plan);
     if (derived.length === 0) {
@@ -216,14 +186,9 @@ export class ShoppingListService {
     });
   }
 
-  /**
-   * Agrège les MealIngredient des créneaux assignés (quantité × portions),
-   * groupés par ingrédient + unité, quantité arrondie à 2 décimales.
-   */
   private computeDerived(plan: Plan): DerivedLine[] {
     // ponytail: un repas placé en dîner J + déjeuner J+1 (restes) est compté 2×.
-    // Dédupliquer les restes demanderait de détecter les chaînes dîner->déjeuner,
-    // fragile — à trancher si le sur-achat devient gênant.
+    // Détecter les chaînes dîner->déjeuner si le sur-achat devient gênant.
     const byKey = new Map<string, DerivedLine>();
     for (const slot of plan.slots) {
       if (!slot.meal) {
@@ -248,8 +213,7 @@ export class ShoppingListService {
 
     return [...byKey.values()].map((line) => ({
       ...line,
-      // Arrondi à l'écriture : l'accumulation en float64 des numeric Postgres
-      // peut produire 250.00000000000003 ; 2 décimales suffisent.
+      // L'accumulation en float64 produit des 250.00000000000003.
       quantity: Math.round(line.quantity * 100) / 100,
     }));
   }

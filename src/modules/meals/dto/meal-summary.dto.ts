@@ -1,10 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/**
- * Aperçu d'un repas pour la liste GET /meals : tous les champs de Meal SAUF
- * `ingredients` (la liste ne les charge pas — voir findAll). Le détail
- * GET /meals/:id renvoie le `Meal` complet.
- */
+/** `ingredients` absent par choix : seul GET /meals/:id les charge. */
 export class MealSummaryDto {
   @ApiProperty()
   id!: string;

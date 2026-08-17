@@ -20,9 +20,8 @@ export class HealthController {
     },
   })
   check() {
-    // ponytail: liveness seule — toute requête DB ici réveille Neon à chaque
-    // ping du keep-alive et brûle le quota compute. Readiness à rajouter sur
-    // une route distincte le jour où un orchestrateur en a réellement besoin.
+    // ponytail: liveness seule — une requête DB ici réveillerait Neon à chaque ping
+    // du keep-alive et brûlerait le quota compute. Readiness sur une route à part.
     return {
       status: 'ok',
       uptime: process.uptime(),

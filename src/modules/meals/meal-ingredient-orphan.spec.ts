@@ -2,13 +2,8 @@ import { getMetadataArgsStorage } from 'typeorm';
 import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal } from './entities/meal.entity';
 
-/**
- * TypeORM lit `orphanedRowAction` sur la relation **inverse**
- * (`OneToManySubjectBuilder`), donc sur le `@ManyToOne` de MealIngredient.
- * Déclaré uniquement côté `@OneToMany`, il reste au défaut `nullify` et retirer
- * une ligne d'ingrédient tente un `UPDATE meal_ingredients SET meal_id = NULL`
- * qui viole la contrainte NOT NULL.
- */
+// Verrouille le côté de la relation : `orphanedRowAction` déclaré sur le @OneToMany
+// de Meal reste à `nullify`, et retirer un ingrédient viole le NOT NULL sur meal_id.
 describe('MealIngredient.meal', () => {
   const relations = getMetadataArgsStorage().relations;
 

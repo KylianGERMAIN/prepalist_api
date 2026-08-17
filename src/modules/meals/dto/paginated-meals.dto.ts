@@ -1,10 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MealSummaryDto } from './meal-summary.dto';
 
-/**
- * Forme de la réponse paginée de GET /meals pour Swagger (type nommé côté front).
- * Les items sont des résumés (sans ingrédients) : la liste reste légère.
- */
+// Duplique `PaginatedDto` : Swagger ne nomme pas les génériques, le front n'en
+// tirerait aucun type.
 export class PaginatedMealsDto {
   @ApiProperty({ type: [MealSummaryDto] })
   items!: MealSummaryDto[];
