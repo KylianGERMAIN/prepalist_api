@@ -17,11 +17,7 @@ export enum ShoppingItemSource {
   MANUAL = 'MANUAL',
 }
 
-/**
- * Item matérialisé de la liste de courses du plan. Un item DERIVED est
- * (re)calculé depuis les plats par `sync` ; un item MANUAL est saisi par
- * l'utilisateur et jamais touché par `sync`.
- */
+// `sync` recalcule les items DERIVED depuis les plats et ne touche jamais aux MANUAL.
 @Entity('shopping_list_items')
 @Index('UQ_shopping_items_derived', ['planId', 'ingredientId', 'unit'], {
   unique: true,

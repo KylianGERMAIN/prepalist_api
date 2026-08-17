@@ -4,10 +4,7 @@ import { DataSource, DataSourceOptions } from 'typeorm';
 // Chargé pour la CLI TypeORM (migrations) qui tourne hors contexte Nest.
 loadEnv();
 
-/**
- * Options TypeORM partagées entre l'app (app.module) et la CLI de migrations.
- * `synchronize: false` partout : le schéma n'évolue que par migrations.
- */
+// Partagées entre l'app (`app.module`) et la CLI de migrations.
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
   host: process.env.DB_HOST ?? 'localhost',
@@ -19,9 +16,8 @@ export const dataSourceOptions: DataSourceOptions = {
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
   synchronize: false,
   logging: process.env.NODE_ENV === 'local',
-  // Postgres managé (Neon/Supabase/RDS) impose TLS. DB_SSL=true active le chiffrement
-  // de la connexion (app + CLI migrations). rejectUnauthorized:false : on chiffre sans
-  // vérifier la chaîne (suffisant pour ces providers ; passer un CA si besoin de vérif stricte).
+  // Les Postgres managés (Neon, RDS) imposent TLS. `rejectUnauthorized: false`
+  // chiffre sans vérifier la chaîne : fournir un CA pour une vérification stricte.
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 };
 

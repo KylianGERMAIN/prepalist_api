@@ -2,7 +2,6 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
-/** Query de pagination réutilisable par toutes les listes. */
 export class PaginationQueryDto {
   @ApiPropertyOptional({ type: Number, default: 1, minimum: 1 })
   @IsOptional()
@@ -24,7 +23,6 @@ export class PaginationQueryDto {
   }
 }
 
-/** Enveloppe de réponse paginée. */
 export class PaginatedDto<T> {
   @ApiProperty({ isArray: true })
   items: T[];

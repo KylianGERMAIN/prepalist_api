@@ -6,8 +6,7 @@ describe('plan-dates', () => {
       expect(today()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
 
-    // La raison d'être de la fonction : un serveur UTC ne doit pas renvoyer la
-    // veille pour un utilisateur déjà passé à minuit à Paris.
+    // Un serveur UTC renverrait la veille pour qui a déjà passé minuit à Paris.
     it('ancre sur Europe/Paris et non sur UTC (heure d’été, UTC+2)', () => {
       expect(today(new Date('2026-07-29T22:30:00Z'))).toBe('2026-07-30');
       expect(today(new Date('2026-07-29T21:30:00Z'))).toBe('2026-07-29');

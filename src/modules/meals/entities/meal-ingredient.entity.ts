@@ -10,18 +10,15 @@ import { numericTransformer } from '../../../common/transformers/numeric.transfo
 import { Ingredient } from '../../ingredients/entities/ingredient.entity';
 import { Meal } from './meal.entity';
 
-/** Jointure repas <-> ingrédient avec payload (quantité, unité). */
 @Entity('meal_ingredients')
 export class MealIngredient {
   @ApiProperty()
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  // orphanedRowAction est ici et non sur le @OneToMany de Meal : TypeORM le lit
-  // sur `relation.inverseRelation`, donc sur ce côté-ci
-  // (OneToManySubjectBuilder.js:159-170). Déclaré côté @OneToMany il reste au
-  // défaut 'nullify', et retirer une ligne d'ingrédient tente un
-  // `UPDATE meal_ingredients SET meal_id = NULL` qui viole le NOT NULL.
+  // `orphanedRowAction` doit être ici et non sur le @OneToMany de Meal : TypeORM
+  // le lit via `relation.inverseRelation`. Placé là-bas il reste à 'nullify', et
+  // retirer un ingrédient viole alors le NOT NULL sur `meal_id`.
   @ManyToOne(() => Meal, (meal) => meal.ingredients, {
     onDelete: 'CASCADE',
     orphanedRowAction: 'delete',

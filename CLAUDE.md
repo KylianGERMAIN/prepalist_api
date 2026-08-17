@@ -39,7 +39,17 @@ src/
 - TypeScript `strict: true`. ESLint + Prettier font foi.
 - Un module par domaine (`controller` / `service` / `dto` / `entities`).
 - DTO validés `class-validator`. Erreurs via exceptions Nest.
-- **JSDoc en français** sur les méthodes publiques.
+- **Commentaires en français**, et seulement quand le code ne suffit pas :
+  contrainte externe (driver, lib), couplage non local, invariant, effet de bord
+  inattendu. Jamais de commentaire qui paraphrase un nom ou récite la ligne
+  suivante. Test : qu'est-ce qui casse si je le supprime ? Rien → il part.
+  - `/** */` quand l'information sert l'**appelant** — elle remonte dans le
+    tooltip de l'IDE : contrat, convention d'unité, effet de bord.
+  - `//` quand elle sert le **mainteneur**, qui a le corps sous les yeux :
+    piège d'implémentation, ordre d'exécution requis.
+  - Une phrase par contrainte, deux contraintes au maximum — l'enroulement à
+    80 colonnes ne compte pas. Trois phrases, c'est du raisonnement : garde le
+    danger, jette le raisonnement.
 - Nommage : fichiers `kebab-case`, classes `PascalCase`, colonnes DB
   `snake_case` (via `name:`), enums `UPPER_SNAKE`.
 - Toute modif de schéma = une migration générée et commitée dans le même PR.
