@@ -45,7 +45,7 @@ Rien d'autre : les tables sont créées par les migrations TypeORM (jouées par 
 - **Auto-Deploy** : **No** (Settings → Build & Deploy). On déploie uniquement via le Deploy Hook sur tag.
 - **Pre-Deploy Command** : `pnpm migration:run:prod` — joue les migrations compilées (`dist/`) contre Neon avant de basculer sur la nouvelle version.
 - **Health Check Path** : `/health` (teste la DB, renvoie 503 si down).
-- **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur).
+- **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur) : vide en production n'autorise **aucune** origine. `NODE_ENV` doit valoir exactement `production` — c'est lui qui coupe Swagger.
 
 Puis **Settings → Deploy Hook** : copier l'URL → la mettre dans le repo `prepalist_api` :
 `Settings → Secrets and variables → Actions → New secret` : `RENDER_DEPLOY_HOOK`.

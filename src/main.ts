@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { resolveCorsOrigin } from './common/cors-origin';
+import { isProduction } from './common/environment';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { requestId } from './common/middleware/request-id.middleware';
 import { APP_VERSION } from './common/version';
@@ -31,9 +32,8 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Hors production seulement : `/docs-json` est une route non authentifiée qui livre
-  // toute la surface d'API.
-  if (process.env.NODE_ENV !== 'production') {
+  // `/docs-json` est une route non authentifiée qui livre toute la surface d'API.
+  if (!isProduction(process.env.NODE_ENV)) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('PrepaList API')
       .setDescription('API meal-prep PrepaList v2')
