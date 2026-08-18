@@ -3,6 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { resolveCorsOrigin } from './common/cors-origin';
+import { isProduction } from './common/environment';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { requestId } from './common/middleware/request-id.middleware';
 import { APP_VERSION } from './common/version';
@@ -13,12 +15,11 @@ async function bootstrap() {
   app.use(helmet());
   app.use(requestId);
 
-  // `CORS_ORIGINS` vide reflète l'origin appelante, donc autorise tout le monde.
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
   app.enableCors({
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    origin: resolveCorsOrigin({
+      corsOrigins: process.env.CORS_ORIGINS,
+      nodeEnv: process.env.NODE_ENV,
+    }),
     credentials: true,
   });
 
@@ -31,14 +32,17 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('PrepaList API')
-    .setDescription('API meal-prep PrepaList v2')
-    .setVersion(APP_VERSION)
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
+  // `/docs-json` est une route non authentifiée qui livre toute la surface d'API.
+  if (!isProduction(process.env.NODE_ENV)) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('PrepaList API')
+      .setDescription('API meal-prep PrepaList v2')
+      .setVersion(APP_VERSION)
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

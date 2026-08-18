@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { isProduction } from './common/environment';
 import { dataSourceOptions } from './config/data-source';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -27,7 +28,7 @@ const REQUIRED_PROD_ENV = [
 ];
 
 function validateEnv(config: Record<string, unknown>) {
-  if (config.NODE_ENV === 'production') {
+  if (isProduction(config.NODE_ENV as string | undefined)) {
     const missing = REQUIRED_PROD_ENV.filter((key) => !config[key]);
     if (missing.length > 0) {
       throw new Error(

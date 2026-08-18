@@ -15,7 +15,7 @@ cp .env.example .env          # ajuster les secrets JWT
 docker compose up -d          # Postgres 16 sur :5432
 pnpm install
 pnpm migration:run            # crée le schéma
-pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
+pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs (hors prod)
 ```
 
 ## Scripts

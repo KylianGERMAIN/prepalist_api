@@ -13,7 +13,7 @@ main : commit … commit … commit        (rien ne se déploie)
                      GHA deploy (api)                              GHA deploy (front)
                      curl Render Deploy Hook                       curl Vercel Deploy Hook
                           │                                              │
-              Render: build Docker → Pre-Deploy migrations → up    Vercel: build → prod
+              Render: build Docker → migrations → up               Vercel: build → prod
 ```
 
 ---
@@ -32,7 +32,7 @@ main : commit … commit … commit        (rien ne se déploie)
 | database | `DB_NAME` |
 | — | `DB_SSL=true` (Neon impose TLS) |
 
-Rien d'autre : les tables sont créées par les migrations TypeORM (jouées par Render, cf. §2). `synchronize:false`, le schéma n'évolue que par migrations.
+Rien d'autre : les tables sont créées par les migrations TypeORM, jouées au démarrage du service Render (cf. §2). `synchronize:false`, le schéma n'évolue que par migrations.
 
 ---
 
@@ -43,9 +43,13 @@ Rien d'autre : les tables sont créées par les migrations TypeORM (jouées par 
 - **Runtime** : `Docker` (utilise le `Dockerfile` du repo).
 - **Branch** : `main`.
 - **Auto-Deploy** : **No** (Settings → Build & Deploy). On déploie uniquement via le Deploy Hook sur tag.
-- **Pre-Deploy Command** : `pnpm migration:run:prod` — joue les migrations compilées (`dist/`) contre Neon avant de basculer sur la nouvelle version.
-- **Health Check Path** : `/health` (teste la DB, renvoie 503 si down).
-- **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur).
+- **Docker Command** : `pnpm start:migrate` — joue les migrations compilées (`dist/`) contre Neon, puis démarre le serveur, dans un process qui reste up.
+
+  Le champ **Pre-Deploy Command** serait plus propre (migration séparée du run) mais il est **payant**, indisponible sur le tier Free. Deux pièges à ne pas rejouer : ce champ **ne passe pas par un shell**, donc un `&&` y est reçu comme argument et non interprété — d'où le passage par le script `pnpm`, dont c'est pnpm qui exécute la valeur dans un shell. Et y mettre `pnpm migration:run:prod` seul migre puis rend la main : Render tue le service avec `Application exited early`.
+
+  Tenable parce que le tier Free n'a qu'une instance. En multi-réplicas, chaque réplique jouerait les migrations en parallèle — c'est ce que le commentaire du `Dockerfile` prévoit en gardant `CMD ["node", "dist/main"]` et en renvoyant les migrations vers une étape de release dédiée.
+- **Health Check Path** : `/health`. **Liveness seule** : la sonde base a été retirée (`afeed64`), la route ne touche jamais Postgres et répond toujours `200` tant que le process vit. Une base tombée ne la fait pas passer au rouge — c'est volontaire, une requête DB à chaque ping réveillerait Neon et brûlerait son quota compute.
+- **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur) : vide en production n'autorise **aucune** origine. `NODE_ENV` doit valoir exactement `production` — c'est lui qui coupe Swagger.
 
 Puis **Settings → Deploy Hook** : copier l'URL → la mettre dans le repo `prepalist_api` :
 `Settings → Secrets and variables → Actions → New secret` : `RENDER_DEPLOY_HOOK`.
@@ -77,7 +81,8 @@ git push --follow-tags     # pousse le commit ET le tag → déclenche le workfl
 Vérifier :
 
 ```bash
-curl -fsS https://<render-url>/health        # {"database":"up"}
+curl -fsS https://<render-url>/health        # {"status":"ok","uptime":…,"timestamp":…,"version":"x.y.z"}
+curl -fsS -o /dev/null -w '%{http_code}\n' https://<render-url>/docs   # 404 attendu en prod
 # puis login dans le navigateur sur l'URL Vercel → les cookies httpOnly sont posés
 ```
 
