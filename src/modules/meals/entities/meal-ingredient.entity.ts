@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   Column,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
@@ -23,17 +24,22 @@ export class MealIngredient {
     onDelete: 'CASCADE',
     orphanedRowAction: 'delete',
   })
-  @JoinColumn({ name: 'meal_id' })
+  @JoinColumn({ name: 'meal_id', foreignKeyConstraintName: 'FK_mi_meal' })
   meal!: Meal;
 
+  @Index('IDX_mi_meal')
   @Column({ name: 'meal_id' })
   mealId!: string;
 
   @ApiProperty({ type: () => Ingredient })
   @ManyToOne(() => Ingredient, { eager: true })
-  @JoinColumn({ name: 'ingredient_id' })
+  @JoinColumn({
+    name: 'ingredient_id',
+    foreignKeyConstraintName: 'FK_mi_ingredient',
+  })
   ingredient!: Ingredient;
 
+  @Index('IDX_mi_ingredient')
   @ApiProperty()
   @Column({ name: 'ingredient_id' })
   ingredientId!: string;
