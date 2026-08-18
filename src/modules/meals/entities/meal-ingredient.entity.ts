@@ -39,8 +39,8 @@ export class MealIngredient {
   })
   ingredient!: Ingredient;
 
-  @ApiProperty()
   @Index('IDX_mi_ingredient')
+  @ApiProperty()
   @Column({ name: 'ingredient_id' })
   ingredientId!: string;
 

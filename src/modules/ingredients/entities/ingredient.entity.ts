@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
-@Index('UQ_ingredients_name_lower', { synchronize: false })
 @Entity('ingredients')
 export class Ingredient {
   @ApiProperty()
