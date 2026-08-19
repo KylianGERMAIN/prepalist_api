@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
+import { roundQuantity } from '../../common/quantity';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -213,8 +214,7 @@ export class ShoppingListService {
 
     return [...byKey.values()].map((line) => ({
       ...line,
-      // L'accumulation en float64 produit des 250.00000000000003.
-      quantity: Math.round(line.quantity * 100) / 100,
+      quantity: roundQuantity(line.quantity),
     }));
   }
 

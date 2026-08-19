@@ -43,6 +43,8 @@ src/
   contrainte externe (driver, lib), couplage non local, invariant, effet de bord
   inattendu. Jamais de commentaire qui paraphrase un nom ou récite la ligne
   suivante. Test : qu'est-ce qui casse si je le supprime ? Rien → il part.
+  Un symbole exporté ne donne droit à rien ; le choix ci-dessous ne se pose
+  qu'une fois le commentaire justifié.
   - `/** */` quand l'information sert l'**appelant** — elle remonte dans le
     tooltip de l'IDE : contrat, convention d'unité, effet de bord.
   - `//` quand elle sert le **mainteneur**, qui a le corps sous les yeux :
