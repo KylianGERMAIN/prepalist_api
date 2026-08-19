@@ -16,8 +16,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { PlanDto } from './dto/plan.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
-import { Plan } from './entities/plan.entity';
 import { PlanService } from './plan.service';
 
 @ApiTags('plan')
@@ -30,7 +30,7 @@ export class PlanController {
   @ApiOperation({
     summary: 'Plan courant de l’utilisateur, créé vide au premier accès',
   })
-  @ApiOkResponse({ type: Plan })
+  @ApiOkResponse({ type: PlanDto })
   find(@CurrentUser('id') userId: string) {
     return this.plan.ensureForUser(userId);
   }
@@ -38,14 +38,14 @@ export class PlanController {
   @Post('generate')
   @HttpCode(200)
   @ApiOperation({ summary: 'Remplit les créneaux vides par tirage pondéré' })
-  @ApiOkResponse({ type: Plan })
+  @ApiOkResponse({ type: PlanDto })
   generate(@CurrentUser('id') userId: string) {
     return this.plan.generate(userId);
   }
 
   @Patch('slots/:slotId')
   @ApiOperation({ summary: 'Met à jour un créneau (repas / portions)' })
-  @ApiOkResponse({ type: Plan })
+  @ApiOkResponse({ type: PlanDto })
   updateSlot(
     @CurrentUser('id') userId: string,
     @Param('slotId', ParseUUIDPipe) slotId: string,
@@ -59,7 +59,7 @@ export class PlanController {
     summary:
       'Vide les créneaux du plan et les items dérivés de la liste (les items manuels sont conservés)',
   })
-  @ApiOkResponse({ type: Plan })
+  @ApiOkResponse({ type: PlanDto })
   clear(@CurrentUser('id') userId: string) {
     return this.plan.clearSlots(userId);
   }

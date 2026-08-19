@@ -43,7 +43,10 @@ const derivedItem = (
 
 describe('ShoppingListService', () => {
   let service: ShoppingListService;
-  let planService: { ensureForUser: jest.Mock };
+  let planService: {
+    ensureForUser: jest.Mock;
+    ensureForUserWithIngredients: jest.Mock;
+  };
   let txRepo: {
     find: jest.Mock;
     create: jest.Mock;
@@ -61,7 +64,15 @@ describe('ShoppingListService', () => {
   };
 
   beforeEach(() => {
-    planService = { ensureForUser: jest.fn() };
+    planService = {
+      ensureForUser: jest.fn(),
+      ensureForUserWithIngredients: jest.fn(),
+    };
+    // Même plan aux deux profondeurs par défaut ; le test « agrège depuis la
+    // lecture profonde » les dissocie, c'est lui qui verrouille le chargement.
+    planService.ensureForUserWithIngredients.mockImplementation(() =>
+      planService.ensureForUser(),
+    );
     txRepo = {
       find: jest.fn().mockResolvedValue([]),
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
@@ -101,6 +112,29 @@ describe('ShoppingListService', () => {
       expect(items.manager.transaction).toHaveBeenCalledTimes(1);
       expect(txRepo.create).toHaveBeenCalled();
       expect(items.find).toHaveBeenCalled();
+    });
+
+    // Sans cette dissociation, revenir au plan peu profond garderait la suite
+    // verte pendant que la liste sortirait vide en prod (`ingredients ?? []`).
+    it('aggregates from the deep read, not from the plan without ingredients', async () => {
+      planService.ensureForUser.mockResolvedValue(
+        plan([{ servings: 1, meal: {} }]),
+      );
+      planService.ensureForUserWithIngredients.mockResolvedValue(
+        plan([
+          {
+            servings: 1,
+            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+          },
+        ]),
+      );
+      items.count.mockResolvedValue(0);
+
+      await service.forPlan('u1');
+
+      expect(txRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ ingredientId: 'i1', quantity: 250 }),
+      );
     });
 
     it('does not sync when the list already holds items (e.g. a manual one)', async () => {

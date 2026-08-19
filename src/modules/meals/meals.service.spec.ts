@@ -51,7 +51,9 @@ describe('MealsService', () => {
       ],
     });
     expect(meals.save).toHaveBeenCalled();
-    expect(meals.findOne).toHaveBeenCalledWith({ where: { id: 'm1' } });
+    expect(meals.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'm1' } }),
+    );
     expect(meal.ingredients[0].ingredient.name).toBe('Curry en poudre');
   });
 
@@ -66,6 +68,16 @@ describe('MealsService', () => {
         ],
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('findOne loads the ingredient lines and their ingredient', async () => {
+    meals.findOne.mockResolvedValue({ id: 'm1' });
+    await service.findOne('m1');
+    expect(meals.findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relations: { ingredients: { ingredient: true } },
+      }),
+    );
   });
 
   it('findOne throws when the meal is missing', async () => {

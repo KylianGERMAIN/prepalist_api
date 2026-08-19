@@ -32,7 +32,7 @@ export class MealIngredient {
   mealId!: string;
 
   @ApiProperty({ type: () => Ingredient })
-  @ManyToOne(() => Ingredient, { eager: true })
+  @ManyToOne(() => Ingredient)
   @JoinColumn({
     name: 'ingredient_id',
     foreignKeyConstraintName: 'FK_mi_ingredient',

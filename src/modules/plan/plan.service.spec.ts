@@ -86,7 +86,17 @@ describe('PlanService', () => {
     it('cherche par utilisateur seul : aucune date en critère', async () => {
       plans.findOne.mockResolvedValue(planOf([]));
       await service.ensureForUser('u1');
-      expect(plans.findOne).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+      expect(plans.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'u1' } }),
+      );
+    });
+
+    it('charge les repas des créneaux sans leurs ingrédients', async () => {
+      plans.findOne.mockResolvedValue(planOf([]));
+      await service.ensureForUser('u1');
+      expect(plans.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: { slots: { meal: true } } }),
+      );
     });
 
     it('crée un plan de 7 jours × 2 créneaux au premier accès', async () => {

@@ -45,7 +45,6 @@ export class Meal {
   @ApiProperty({ type: () => [MealIngredient] })
   @OneToMany(() => MealIngredient, (mi) => mi.meal, {
     cascade: true,
-    eager: true,
     orphanedRowAction: 'delete',
   })
   ingredients!: MealIngredient[];
