@@ -1,36 +1,14 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { resolveCorsOrigin } from './common/cors-origin';
 import { isProduction } from './common/environment';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { requestId } from './common/middleware/request-id.middleware';
 import { APP_VERSION } from './common/version';
+import { configureApp } from './configure-app';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use(helmet());
-  app.use(requestId);
-
-  app.enableCors({
-    origin: resolveCorsOrigin({
-      corsOrigins: process.env.CORS_ORIGINS,
-      nodeEnv: process.env.NODE_ENV,
-    }),
-    credentials: true,
-  });
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter());
+  configureApp(app);
 
   // `/docs-json` est une route non authentifiée qui livre toute la surface d'API.
   if (!isProduction(process.env.NODE_ENV)) {
