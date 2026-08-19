@@ -26,10 +26,13 @@ export class PlanDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ description: 'Premier jour du plan (YYYY-MM-DD)' })
+  @ApiProperty({
+    description:
+      'Premier jour du plan (YYYY-MM-DD). Ancre d’affichage : sert à libeller les jours et à situer le jour courant, jamais à retrouver un plan.',
+  })
   startDate!: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Nombre de jours couverts par le plan.' })
   dayCount!: number;
 
   @ApiProperty({ type: String, format: 'date-time' })
