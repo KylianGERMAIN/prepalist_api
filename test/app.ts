@@ -4,31 +4,36 @@ import { ThrottlerStorage } from '@nestjs/throttler';
 import request from 'supertest';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
-import { configureApp } from '../src/configure-app';
+import { configureApp } from '../src/common/configure-app';
 
 export const TEST_PASSWORD = 'Password1!';
 
-export interface TestContext {
+const unlimitedThrottler = {
+  increment: () =>
+    Promise.resolve({
+      totalHits: 1,
+      timeToExpire: 0,
+      isBlocked: false,
+      timeToBlockExpire: 0,
+    }),
+};
+
+/**
+ * `throttle: true` laisse le compteur réel en place, pour un test du
+ * `@Throttle({ default: { limit: 5, ttl: 60_000 } })` de `/auth/*`. Par défaut il
+ * est neutralisé, sinon le 6e compte inscrit dans un run prendrait un 429.
+ * C'est le stockage qui est remplacé, pas le guard : un `APP_GUARD` en `useClass`
+ * n'est pas interceptable par `overrideGuard`.
+ */
+export async function createTestApp({ throttle = false } = {}): Promise<{
   app: INestApplication;
   db: DataSource;
-}
-
-export async function createTestApp(): Promise<TestContext> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    // `@Throttle({ limit: 5 })` sur /auth/* écrase THROTTLE_LIMIT : au 6e compte
-    // inscrit dans un run, les tests prendraient des 429. Le compteur est
-    // neutralisé plutôt que le guard, qu'un APP_GUARD en useClass n'expose pas.
-    .overrideProvider(ThrottlerStorage)
-    .useValue({
-      increment: () =>
-        Promise.resolve({
-          totalHits: 1,
-          timeToExpire: 0,
-          isBlocked: false,
-          timeToBlockExpire: 0,
-        }),
-    })
-    .compile();
+}> {
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (!throttle) {
+    builder.overrideProvider(ThrottlerStorage).useValue(unlimitedThrottler);
+  }
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication();
   configureApp(app);
@@ -41,10 +46,12 @@ export async function createTestApp(): Promise<TestContext> {
  * Vide les tables entre deux tests, `migrations` exclue.
  * TRUNCATE et non une transaction annulée : les services ouvrent leurs propres
  * transactions, qui ne seraient plus que des savepoints dans celle du test.
+ * Toutes les suites partagent une base : `maxWorkers: 1` (`jest-e2e.json`) est
+ * ce qui empêche un worker de vider les données d'un autre en pleine exécution.
  */
 export async function truncateAll(db: DataSource): Promise<void> {
   const tables = db.entityMetadatas.map((m) => `"${m.tableName}"`).join(', ');
-  await db.query(`TRUNCATE ${tables} RESTART IDENTITY CASCADE`);
+  await db.query(`TRUNCATE ${tables} CASCADE`);
 }
 
 export interface TestUser {

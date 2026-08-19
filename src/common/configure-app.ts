@@ -1,8 +1,8 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
-import { resolveCorsOrigin } from './common/cors-origin';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { requestId } from './common/middleware/request-id.middleware';
+import { resolveCorsOrigin } from './cors-origin';
+import { AllExceptionsFilter } from './filters/all-exceptions.filter';
+import { requestId } from './middleware/request-id.middleware';
 
 /** Partagé avec les tests e2e : ce qui n'est pas ici n'est pas testé. */
 export function configureApp(app: INestApplication): void {

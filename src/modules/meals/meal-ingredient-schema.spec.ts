@@ -1,8 +1,8 @@
 import { getMetadataArgsStorage } from 'typeorm';
 import { MealIngredient } from './entities/meal-ingredient.entity';
 
-// La CI tourne sans Postgres : `migration:generate` ne peut pas y détecter qu'un
-// index ou un nom de contrainte a disparu du metadata.
+// Filet rapide, sans base : les e2e vérifient le schéma réel mais exigent un
+// Postgres, alors que ces assertions tournent dans `pnpm test`.
 describe('MealIngredient — alignement du metadata sur le schéma', () => {
   const indices = getMetadataArgsStorage().indices.filter(
     (i) => i.target === MealIngredient,
