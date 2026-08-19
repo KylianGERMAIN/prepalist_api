@@ -38,7 +38,7 @@ export class MealsService {
     return this.findOne(saved.id);
   }
 
-  /** Sans les `ingredients` : le QueryBuilder ignore les relations eager. */
+  /** Sans les `ingredients` : la liste n'expose qu'un résumé (MealSummaryDto). */
   async findAll(query: MealQueryDto): Promise<PaginatedDto<Meal>> {
     const qb = this.meals.createQueryBuilder('meal');
 
@@ -62,7 +62,12 @@ export class MealsService {
   }
 
   async findOne(id: string): Promise<Meal> {
-    const meal = await this.meals.findOne({ where: { id } });
+    // `ingredients` chargés : `update` les remplace en bloc, et sans la
+    // collection en mémoire `orphanedRowAction` n'a aucun orphelin à supprimer.
+    const meal = await this.meals.findOne({
+      where: { id },
+      relations: { ingredients: { ingredient: true } },
+    });
     if (!meal) {
       throw new NotFoundException('Repas introuvable');
     }

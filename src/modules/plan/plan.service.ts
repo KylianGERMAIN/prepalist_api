@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, FindOptionsRelations, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
 import {
@@ -22,6 +22,10 @@ const MS_PER_DAY = 86_400_000;
 const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
+const SLOT_RELATIONS = { slots: { meal: true } } as const;
+const INGREDIENT_RELATIONS = {
+  slots: { meal: { ingredients: { ingredient: true } } },
+} as const;
 
 @Injectable()
 export class PlanService {
@@ -47,7 +51,19 @@ export class PlanService {
 
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
-    const existing = await this.plans.findOne({ where: { userId } });
+    return this.ensure(userId, SLOT_RELATIONS);
+  }
+
+  /** Même plan, avec de quoi agréger la liste de courses. */
+  async ensureForUserWithIngredients(userId: string): Promise<Plan> {
+    return this.ensure(userId, INGREDIENT_RELATIONS);
+  }
+
+  private async ensure(
+    userId: string,
+    relations: FindOptionsRelations<Plan>,
+  ): Promise<Plan> {
+    const existing = await this.plans.findOne({ where: { userId }, relations });
     if (existing) {
       return existing;
     }
@@ -65,7 +81,10 @@ export class PlanService {
       // Course au premier accès : deux requêtes passent le findOne avant l'insert,
       // l'unicité (user_id) fait échouer la seconde.
       if (isUniqueViolation(err)) {
-        const winner = await this.plans.findOne({ where: { userId } });
+        const winner = await this.plans.findOne({
+          where: { userId },
+          relations,
+        });
         if (winner) {
           return winner;
         }
@@ -121,8 +140,8 @@ export class PlanService {
       changed.push(slot);
     }
 
-    // La seule colonne FK, sans la relation `meal` chargée en eager : au save elle
-    // écraserait le mealId qu'on vient de poser.
+    // La seule colonne FK, sans la relation `meal` : chargée, elle écraserait au
+    // save le mealId qu'on vient de poser.
     if (changed.length > 0) {
       await this.slots.save(
         changed.map((s) => ({

@@ -49,7 +49,7 @@ export class PlanSlot {
   mealId!: string | null;
 
   @ApiProperty({ type: () => Meal, nullable: true })
-  @ManyToOne(() => Meal, { eager: true, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Meal, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({
     name: 'meal_id',
     foreignKeyConstraintName: 'FK_plan_slots_meal',

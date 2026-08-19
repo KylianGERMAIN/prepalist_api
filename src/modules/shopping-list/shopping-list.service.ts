@@ -44,7 +44,11 @@ export class ShoppingListService {
     const count = await this.items.count({ where: { planId: plan.id } });
     if (count === 0) {
       try {
-        await this.syncDerived(plan);
+        // Relu en profond ici seulement : la jointure des ingrédients se paie à
+        // l'init, pas à chaque lecture d'une liste déjà peuplée.
+        await this.syncDerived(
+          await this.plan.ensureForUserWithIngredients(userId),
+        );
       } catch (err) {
         // Deux GET concurrents sur un plan vide lancent deux sync ; l'index unique
         // partiel fait échouer le second, dont le travail est déjà fait.
@@ -60,7 +64,7 @@ export class ShoppingListService {
   }
 
   async sync(userId: string): Promise<ShoppingListDto> {
-    const plan = await this.plan.ensureForUser(userId);
+    const plan = await this.plan.ensureForUserWithIngredients(userId);
     await this.syncDerived(plan);
     return this.read(plan);
   }
@@ -153,6 +157,8 @@ export class ShoppingListService {
 
   // Insert-only : jamais de mise à jour de quantité ni de suppression d'orphelin,
   // sinon les éditions manuelles de l'utilisateur seraient écrasées.
+  // `plan` vient d'`ensureForUserWithIngredients` : sans les ingrédients chargés,
+  // l'agrégation rend une liste vide sans lever d'erreur.
   private async syncDerived(plan: Plan): Promise<void> {
     const derived = this.computeDerived(plan);
     if (derived.length === 0) {

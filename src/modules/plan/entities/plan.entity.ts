@@ -42,9 +42,6 @@ export class Plan {
   createdAt!: Date;
 
   @ApiProperty({ type: () => [PlanSlot] })
-  @OneToMany(() => PlanSlot, (slot) => slot.plan, {
-    cascade: true,
-    eager: true,
-  })
+  @OneToMany(() => PlanSlot, (slot) => slot.plan, { cascade: true })
   slots!: PlanSlot[];
 }

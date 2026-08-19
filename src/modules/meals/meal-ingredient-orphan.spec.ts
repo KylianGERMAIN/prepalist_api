@@ -14,11 +14,12 @@ describe('MealIngredient.meal', () => {
     expect(manyToOne?.options.orphanedRowAction).toBe('delete');
   });
 
-  it('garde la cascade et le eager côté Meal', () => {
+  // Un eager ici rendrait le chargement global, que chaque appelant déclare.
+  it('garde la cascade sans eager côté Meal', () => {
     const oneToMany = relations.find(
       (r) => r.target === Meal && r.propertyName === 'ingredients',
     );
     expect(oneToMany?.options.cascade).toBe(true);
-    expect(oneToMany?.options.eager).toBe(true);
+    expect(oneToMany?.options.eager).toBeUndefined();
   });
 });
