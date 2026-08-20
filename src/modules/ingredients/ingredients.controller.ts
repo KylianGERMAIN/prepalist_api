@@ -6,6 +6,8 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { UserRole } from '../users/entities/user.entity';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
 import { IngredientQueryDto } from './dto/ingredient-query.dto';
 import { Ingredient } from './entities/ingredient.entity';
@@ -25,7 +27,10 @@ export class IngredientsController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Ajoute un ingrédient au catalogue' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Ajoute un ingrédient au catalogue (admin uniquement)',
+  })
   @ApiCreatedResponse({ type: Ingredient })
   create(@Body() dto: CreateIngredientDto) {
     return this.ingredients.create(dto);

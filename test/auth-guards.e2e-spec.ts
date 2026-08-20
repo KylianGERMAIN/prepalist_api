@@ -45,12 +45,13 @@ describe('Gardes d’autorisation (e2e)', () => {
     await request(app.getHttpServer()).get('/health').expect(200);
   });
 
-  // Les trois routes @Roles(ADMIN) du catalogue : en couvrir une seule laisserait
-  // retirer le décorateur des deux autres sans qu'un test bronche.
+  // Les routes @Roles(ADMIN) du catalogue : en couvrir une seule laisserait
+  // retirer le décorateur des autres sans qu'un test bronche.
   it.each([
     ['post', '/meals'],
     ['patch', `/meals/${SOME_UUID}`],
     ['delete', `/meals/${SOME_UUID}`],
+    ['post', '/ingredients'],
   ] as const)('refuse %s %s à un USER', async (method, path) => {
     await request(app.getHttpServer())
       [method](path)

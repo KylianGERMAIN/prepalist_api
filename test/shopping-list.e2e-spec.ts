@@ -32,7 +32,7 @@ describe('Liste de courses (e2e)', () => {
     for (const name of ['Tomate', 'Basilic']) {
       const res = await request(app.getHttpServer())
         .post('/ingredients')
-        .set(...bearer(user))
+        .set(...bearer(admin))
         .send({ name })
         .expect(201);
       ids.push(res.body.id as string);

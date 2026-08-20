@@ -10,9 +10,16 @@ import { Ingredient } from '../ingredients/entities/ingredient.entity';
 import { CreateMealDto } from './dto/create-meal.dto';
 import { MealIngredientDto } from './dto/meal-ingredient.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
+import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealIngredient } from './entities/meal-ingredient.entity';
-import { Meal } from './entities/meal.entity';
+import { Meal, MealStatus } from './entities/meal.entity';
+import { MealStateService, MealView } from './meal-state.service';
+
+const FAVORITE_OF_USER = `EXISTS (
+  SELECT 1 FROM "user_meal_state" s
+  WHERE s."meal_id" = meal.id AND s."user_id" = :userId AND s."is_favorite"
+)`;
 
 @Injectable()
 export class MealsService {
@@ -22,28 +29,36 @@ export class MealsService {
     private readonly mealIngredients: Repository<MealIngredient>,
     @InjectRepository(Ingredient)
     private readonly ingredients: Repository<Ingredient>,
+    private readonly state: MealStateService,
   ) {}
 
-  async create(dto: CreateMealDto): Promise<Meal> {
+  /** Création réservée à l'admin : la recette entre au catalogue de l'application. */
+  async create(userId: string, dto: CreateMealDto): Promise<MealView> {
     const meal = this.meals.create({
       name: dto.name,
-      rating: dto.rating ?? null,
-      isFavorite: dto.isFavorite ?? false,
+      userId: null,
+      status: MealStatus.PUBLISHED,
       tags: dto.tags ?? [],
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
     const saved = await this.meals.save(meal);
     // Relit : les lignes de buildIngredients n'ont pas leur relation `ingredient`
     // hydratée, la réponse omettrait le nom de l'ingrédient.
-    return this.findOne(saved.id);
+    return this.findOneFor(userId, saved.id);
   }
 
   /** Sans les `ingredients` : la liste n'expose qu'un résumé (MealSummaryDto). */
-  async findAll(query: MealQueryDto): Promise<PaginatedDto<Meal>> {
+  async findAll(
+    userId: string,
+    query: MealQueryDto,
+  ): Promise<PaginatedDto<MealView>> {
     const qb = this.meals.createQueryBuilder('meal');
 
     if (query.favorite !== undefined) {
-      qb.andWhere('meal.is_favorite = :favorite', { favorite: query.favorite });
+      qb.andWhere(
+        query.favorite ? FAVORITE_OF_USER : `NOT ${FAVORITE_OF_USER}`,
+        { userId },
+      );
     }
     if (query.name) {
       qb.andWhere('meal.name ILIKE :name', { name: `%${query.name}%` });
@@ -58,7 +73,16 @@ export class MealsService {
       .take(query.limit)
       .getManyAndCount();
 
-    return new PaginatedDto(items, total, query.page, query.limit);
+    const states = await this.state.forUser(
+      userId,
+      items.map((meal) => meal.id),
+    );
+    return new PaginatedDto(
+      this.state.attach(items, states),
+      total,
+      query.page,
+      query.limit,
+    );
   }
 
   async findOne(id: string): Promise<Meal> {
@@ -74,13 +98,21 @@ export class MealsService {
     return meal;
   }
 
+  async findOneFor(userId: string, id: string): Promise<MealView> {
+    const meal = await this.findOne(id);
+    const states = await this.state.forUser(userId, [id]);
+    return this.state.attach([meal], states)[0];
+  }
+
   /** `dto.ingredients` remplace la liste entière, il ne la complète pas. */
-  async update(id: string, dto: UpdateMealDto): Promise<Meal> {
+  async update(
+    userId: string,
+    id: string,
+    dto: UpdateMealDto,
+  ): Promise<MealView> {
     const meal = await this.findOne(id);
 
     if (dto.name !== undefined) meal.name = dto.name;
-    if (dto.rating !== undefined) meal.rating = dto.rating;
-    if (dto.isFavorite !== undefined) meal.isFavorite = dto.isFavorite;
     if (dto.tags !== undefined) meal.tags = dto.tags;
     if (dto.ingredients !== undefined) {
       meal.ingredients = await this.buildIngredients(dto.ingredients);
@@ -88,7 +120,7 @@ export class MealsService {
 
     await this.meals.save(meal);
     // Même raison que dans `create` : la réponse doit avoir la forme du GET.
-    return this.findOne(id);
+    return this.findOneFor(userId, id);
   }
 
   async remove(id: string): Promise<void> {
@@ -96,14 +128,20 @@ export class MealsService {
     await this.meals.remove(meal);
   }
 
-  async markCooked(id: string): Promise<Meal> {
+  async markCooked(userId: string, id: string): Promise<MealView> {
     await this.findOne(id); // 404 si absent
-    // Incrément en SQL et non via save() : évite le lost update.
-    await this.meals.update(id, {
-      timesCooked: () => '"times_cooked" + 1',
-      lastCookedAt: new Date(),
-    });
-    return this.findOne(id);
+    await this.state.markCooked(userId, id);
+    return this.findOneFor(userId, id);
+  }
+
+  async updateState(
+    userId: string,
+    id: string,
+    dto: UpdateMealStateDto,
+  ): Promise<MealView> {
+    await this.findOne(id); // 404 si absent
+    await this.state.patch(userId, id, dto);
+    return this.findOneFor(userId, id);
   }
 
   private async buildIngredients(
