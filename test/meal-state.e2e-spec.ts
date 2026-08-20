@@ -83,6 +83,16 @@ describe('État par utilisateur (e2e)', () => {
     expect(meal).toMatchObject({ userId: null, status: 'PUBLISHED' });
   });
 
+  // L'état est fusionné dans le repas : une ligne d'état livrée entière y
+  // pousserait son propre user_id, et la recette changerait de propriétaire
+  // selon qui la lit.
+  it('ne fait pas dépendre le propriétaire de la recette du lecteur', async () => {
+    await cook(alice);
+
+    expect(await detail(alice)).toMatchObject({ userId: null });
+    expect((await list(alice)).items[0]).toMatchObject({ userId: null });
+  });
+
   it('n’attribue la cuisson qu’au compte qui l’a faite', async () => {
     await cook(alice);
 

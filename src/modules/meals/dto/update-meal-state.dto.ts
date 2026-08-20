@@ -7,7 +7,15 @@ export class UpdateMealStateDto {
   @IsBoolean()
   isFavorite?: boolean;
 
-  @ApiProperty({ required: false, nullable: true, minimum: 1, maximum: 5 })
+  // `type: Number` explicite : sur une union `number | null` le reflect
+  // metadata rend Object, et le client généré tombe sur un type inutilisable.
+  @ApiProperty({
+    type: Number,
+    required: false,
+    nullable: true,
+    minimum: 1,
+    maximum: 5,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

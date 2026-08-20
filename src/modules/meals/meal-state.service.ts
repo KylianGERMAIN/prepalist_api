@@ -40,7 +40,19 @@ export class MealStateService {
     const rows = await this.states.find({
       where: { userId, mealId: In(mealIds) },
     });
-    return new Map(rows.map((r) => [r.mealId, r]));
+    // Champ par champ, et non la ligne entière : `attach` la fusionne dans le
+    // repas, où `userId` et `mealId` de l'état écraseraient ceux de la recette.
+    return new Map(
+      rows.map((r) => [
+        r.mealId,
+        {
+          isFavorite: r.isFavorite,
+          rating: r.rating,
+          lastCookedAt: r.lastCookedAt,
+          timesCooked: r.timesCooked,
+        },
+      ]),
+    );
   }
 
   attach<T extends Meal>(
