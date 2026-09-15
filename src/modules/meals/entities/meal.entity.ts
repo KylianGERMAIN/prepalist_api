@@ -3,10 +3,20 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { User } from '../../users/entities/user.entity';
 import { MealIngredient } from './meal-ingredient.entity';
+
+export enum MealStatus {
+  PRIVATE = 'PRIVATE',
+  PENDING = 'PENDING',
+  PUBLISHED = 'PUBLISHED',
+}
 
 @Entity('meals')
 export class Meal {
@@ -18,21 +28,19 @@ export class Meal {
   @Column()
   name!: string;
 
-  @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })
-  @Column({ type: 'int', nullable: true })
-  rating!: number | null;
+  @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id', foreignKeyConstraintName: 'FK_meals_user' })
+  user?: User | null;
 
-  @ApiProperty()
-  @Column({ name: 'is_favorite', default: false })
-  isFavorite!: boolean;
+  /** `null` = recette fournie par l'application, sans compte propriétaire. */
+  @ApiProperty({ type: String, nullable: true })
+  @Index('IDX_meals_user')
+  @Column({ name: 'user_id', type: 'uuid', nullable: true })
+  userId!: string | null;
 
-  @ApiProperty({ type: String, format: 'date-time', nullable: true })
-  @Column({ name: 'last_cooked_at', type: 'timestamptz', nullable: true })
-  lastCookedAt!: Date | null;
-
-  @ApiProperty()
-  @Column({ name: 'times_cooked', type: 'int', default: 0 })
-  timesCooked!: number;
+  @ApiProperty({ enum: MealStatus })
+  @Column({ type: 'enum', enum: MealStatus, default: MealStatus.PRIVATE })
+  status!: MealStatus;
 
   @ApiProperty({ type: [String] })
   @Column({ type: 'text', array: true, default: () => "'{}'" })

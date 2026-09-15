@@ -5,6 +5,25 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.5.0] - 2026-09-15
+
+### Corrigé
+
+- **Favori, note et historique de cuisson appartiennent au compte** : ces quatre colonnes étaient portées par `meals`, un catalogue partagé par tous les comptes. Marquer un plat « cuisiné » écrivait donc sur la ligne que tous les autres lisent, et biaisait le score de fraîcheur de leur génération de plan. Elles passent dans `user_meal_state`, clé `(user_id, meal_id)`. L'incrément de `times_cooked` se fait en SQL, deux cuissons concurrentes ne s'écrasent plus.
+
+### Ajouté
+
+- **`PATCH /meals/:id/state`** : favori et note du compte appelant, ouvert à tous les comptes — contrairement à `PATCH /meals/:id`, qui reste réservé à l'admin puisqu'il modifie la recette.
+
+### Modifié
+
+- **`rating` et `isFavorite` sortent du corps de `POST /meals` et `PATCH /meals/:id`** (cassant) : la validation étant stricte, les envoyer rend désormais 400 au lieu d'être ignoré. Ils passent par `PATCH /meals/:id/state`.
+- **Migration destructrice** : l'historique de cuisson, les favoris et les notes existants sont fusionnés sur le plus ancien compte ADMIN. `POST /meals/:id/cooked` ayant toujours été ouvert à tout compte authentifié, l'état antérieur n'est pas attribuable à son auteur ; celui des autres comptes est perdu.
+
+### Sécurité
+
+- **`POST /ingredients` réservé à l'admin** (cassant) : la route alimentait le catalogue commun d'ingrédients sans garde de rôle. Les comptes standard reçoivent désormais 403.
+
 ## [0.4.0] - 2026-08-05
 
 ### Modifié

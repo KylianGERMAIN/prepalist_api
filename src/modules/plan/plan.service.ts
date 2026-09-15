@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, FindOptionsRelations, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
+import { MealStateService, MealView } from '../meals/meal-state.service';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -34,6 +35,7 @@ export class PlanService {
     @InjectRepository(PlanSlot)
     private readonly slots: Repository<PlanSlot>,
     @InjectRepository(Meal) private readonly meals: Repository<Meal>,
+    private readonly state: MealStateService,
     private readonly users: UsersService,
   ) {}
 
@@ -51,7 +53,18 @@ export class PlanService {
 
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
-    return this.ensure(userId, SLOT_RELATIONS);
+    const plan = await this.ensure(userId, SLOT_RELATIONS);
+    // Favori, note et cuissons appartiennent au compte, pas à la recette : sans
+    // cette passe les créneaux les rendraient à leurs valeurs par défaut.
+    const filled = plan.slots.filter(
+      (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
+    );
+    const attached = await this.state.attachFor(
+      userId,
+      filled.map((slot) => slot.meal),
+    );
+    filled.forEach((slot, index) => (slot.meal = attached[index]));
+    return plan;
   }
 
   /** Même plan, avec de quoi agréger la liste de courses. */
@@ -103,10 +116,11 @@ export class PlanService {
   /** Ne remplit que les créneaux vides : une assignation manuelle n'est jamais écrasée. */
   async generate(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
-    const candidates = await this.meals.find();
-    if (candidates.length === 0) {
+    const meals = await this.meals.find();
+    if (meals.length === 0) {
       throw new BadRequestException('Aucune recette pour générer le plan');
     }
+    const candidates = await this.state.attachFor(userId, meals);
 
     const placed = new Map<string, number>();
     const dinnerByDay = new Map<number, string>();
@@ -213,7 +227,7 @@ export class PlanService {
     return a.slot === b.slot ? 0 : a.slot === MealSlot.LUNCH ? -1 : 1;
   };
 
-  private pickWeighted(meals: Meal[], placed: Map<string, number>): string {
+  private pickWeighted(meals: MealView[], placed: Map<string, number>): string {
     const weights = meals.map(
       (meal) => this.baseScore(meal) * Math.pow(0.2, placed.get(meal.id) ?? 0),
     );
@@ -230,7 +244,7 @@ export class PlanService {
   }
 
   /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
-  private baseScore(meal: Meal): number {
+  private baseScore(meal: MealView): number {
     const favorite = meal.isFavorite ? 2 : 0;
     const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
     const freshness = this.freshnessScore(meal.lastCookedAt); // 0 … 2

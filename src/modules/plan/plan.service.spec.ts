@@ -46,6 +46,7 @@ describe('PlanService', () => {
   let slots: { create: jest.Mock; save: jest.Mock; update: jest.Mock };
   let meals: { find: jest.Mock; findOne: jest.Mock };
   let users: { findById: jest.Mock };
+  let state: { attachFor: jest.Mock };
   let manager: { update: jest.Mock; delete: jest.Mock };
   let transaction: jest.Mock;
 
@@ -67,10 +68,12 @@ describe('PlanService', () => {
     };
     meals = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
     users = { findById: jest.fn().mockResolvedValue({ shoppingDay: 2 }) };
+    state = { attachFor: jest.fn((_: unknown, meals: unknown) => meals) };
     service = new PlanService(
       plans as never,
       slots as never,
       meals as never,
+      state as never,
       users as never,
     );
   });

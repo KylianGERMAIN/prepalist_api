@@ -14,6 +14,7 @@ describe('Invariants de base (e2e)', () => {
   let app: INestApplication;
   let db: DataSource;
   let user: TestUser;
+  let admin: TestUser;
 
   beforeAll(async () => {
     ({ app, db } = await createTestApp());
@@ -26,12 +27,13 @@ describe('Invariants de base (e2e)', () => {
   beforeEach(async () => {
     await truncateAll(db);
     user = await registerUser(app);
+    admin = await registerAdmin(app, db);
   });
 
   async function createIngredient(name: string): Promise<string> {
     const res = await request(app.getHttpServer())
       .post('/ingredients')
-      .set(...bearer(user))
+      .set(...bearer(admin))
       .send({ name })
       .expect(201);
     return res.body.id as string;
@@ -56,7 +58,7 @@ describe('Invariants de base (e2e)', () => {
 
     await request(app.getHttpServer())
       .post('/ingredients')
-      .set(...bearer(user))
+      .set(...bearer(admin))
       .send({ name: 'beurre' })
       .expect(409);
   });
@@ -119,7 +121,6 @@ describe('Invariants de base (e2e)', () => {
   });
 
   it('interdit une ligne d’ingrédient détachée de son repas', async () => {
-    const admin = await registerAdmin(app, db);
     const tomate = await createIngredient('Tomate');
     await createMeal(admin, [
       { ingredientId: tomate, quantity: 250, unit: 'g' },
@@ -131,7 +132,6 @@ describe('Invariants de base (e2e)', () => {
   });
 
   it('supprime les lignes d’ingrédients retirées d’un repas', async () => {
-    const admin = await registerAdmin(app, db);
     const tomate = await createIngredient('Tomate');
     const basilic = await createIngredient('Basilic');
     const mealId = await createMeal(admin, [
@@ -158,7 +158,6 @@ describe('Invariants de base (e2e)', () => {
   // FK_plan_slots_meal est en SET NULL : en CASCADE, supprimer un repas du
   // catalogue effacerait les créneaux des plans de tous les utilisateurs.
   it('vide le créneau au lieu de le supprimer quand le repas disparaît', async () => {
-    const admin = await registerAdmin(app, db);
     const tomate = await createIngredient('Tomate');
     const mealId = await createMeal(admin, [
       { ingredientId: tomate, quantity: 250, unit: 'g' },
@@ -203,5 +202,55 @@ describe('Invariants de base (e2e)', () => {
       [plan.body.id],
     );
     expect(rows[0].n).toBe(0);
+  });
+  describe('user_meal_state', () => {
+    let mealId: string;
+
+    beforeEach(async () => {
+      const tomate = await createIngredient('Tomate');
+      mealId = await createMeal(admin, [
+        { ingredientId: tomate, quantity: 250, unit: 'g' },
+      ]);
+      await request(app.getHttpServer())
+        .post(`/meals/${mealId}/cooked`)
+        .set(...bearer(user))
+        .expect(201);
+    });
+
+    const countState = async (): Promise<number> => {
+      const rows = await db.query(
+        'SELECT COUNT(*)::int AS n FROM user_meal_state',
+      );
+      return rows[0].n as number;
+    };
+
+    // PK (user_id, meal_id) : c'est elle que vise le ON CONFLICT de markCooked,
+    // sans quoi chaque cuisson insérerait une ligne de plus.
+    it('interdit deux lignes d’état pour un même couple compte/repas', async () => {
+      const [{ user_id: userId }] = await db.query(
+        'SELECT user_id FROM user_meal_state LIMIT 1',
+      );
+      await expect(
+        db.query(
+          'INSERT INTO user_meal_state (user_id, meal_id) VALUES ($1, $2)',
+          [userId, mealId],
+        ),
+      ).rejects.toMatchObject({ code: '23505' });
+    });
+
+    it('supprime l’état avec le repas', async () => {
+      await request(app.getHttpServer())
+        .delete(`/meals/${mealId}`)
+        .set(...bearer(admin))
+        .expect(204);
+
+      expect(await countState()).toBe(0);
+    });
+
+    it('supprime l’état avec le compte', async () => {
+      await db.query('DELETE FROM users WHERE email = $1', [user.email]);
+
+      expect(await countState()).toBe(0);
+    });
   });
 });
