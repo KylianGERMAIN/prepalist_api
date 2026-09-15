@@ -29,8 +29,22 @@ export class MealStateService {
     private readonly states: Repository<UserMealState>,
   ) {}
 
+  async attachFor<T extends Meal>(
+    userId: string,
+    meals: T[],
+  ): Promise<(T & MealStateFields)[]> {
+    const states = await this.forUser(
+      userId,
+      meals.map((meal) => meal.id),
+    );
+    return meals.map((meal) => ({
+      ...meal,
+      ...(states.get(meal.id) ?? NEVER_TOUCHED),
+    }));
+  }
+
   /** Absent de la Map = jamais touché par ce compte, pas « inconnu ». */
-  async forUser(
+  private async forUser(
     userId: string,
     mealIds: string[],
   ): Promise<Map<string, MealStateFields>> {
@@ -40,8 +54,8 @@ export class MealStateService {
     const rows = await this.states.find({
       where: { userId, mealId: In(mealIds) },
     });
-    // Champ par champ, et non la ligne entière : `attach` la fusionne dans le
-    // repas, où `userId` et `mealId` de l'état écraseraient ceux de la recette.
+    // Champ par champ, et non la ligne entière : `attachFor` la fusionne dans
+    // le repas, où `userId` et `mealId` de l'état écraseraient ceux de la recette.
     return new Map(
       rows.map((r) => [
         r.mealId,
@@ -52,15 +66,6 @@ export class MealStateService {
           timesCooked: r.timesCooked,
         },
       ]),
-    );
-  }
-
-  attach<T extends Meal>(
-    meals: T[],
-    states: Map<string, MealStateFields>,
-  ): (T & MealStateFields)[] {
-    return meals.map((meal) =>
-      Object.assign(meal, states.get(meal.id) ?? NEVER_TOUCHED),
     );
   }
 

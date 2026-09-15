@@ -175,6 +175,33 @@ describe('État par utilisateur (e2e)', () => {
     expect((await list(bob)).items[0]).toMatchObject({ timesCooked: 0 });
   });
 
+  it('refuse un favori null', async () => {
+    await request(app.getHttpServer())
+      .patch(`/meals/${mealId}/state`)
+      .set(...bearer(alice))
+      .send({ isFavorite: null })
+      .expect(400);
+  });
+
+  // Seul test qui échoue si `ensureForUser` cesse de réinjecter dans les slots
+  // les repas que `attachFor` lui rend.
+  it('rend l’état du demandeur dans les créneaux du plan', async () => {
+    await cook(alice);
+    await request(app.getHttpServer())
+      .post('/plan/generate')
+      .set(...bearer(alice))
+      .expect(200);
+
+    const plan = await request(app.getHttpServer())
+      .get('/plan')
+      .set(...bearer(alice))
+      .expect(200);
+    const slot = (plan.body.slots as { meal: MealBody | null }[]).find(
+      (s) => s.meal,
+    );
+    expect(slot?.meal).toMatchObject({ id: mealId, timesCooked: 1 });
+  });
+
   it('rend 404 sur la cuisson d’un repas inexistant', async () => {
     await request(app.getHttpServer())
       .post('/meals/00000000-0000-4000-8000-000000000000/cooked')

@@ -8,10 +8,6 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Pose au passage `user_id` (NULL = recette de l'application) et `status`, que
  * rien ne lit encore : les backfiller plus tard, sur des recettes créées par
  * plusieurs comptes, n'aurait plus de réponse évidente.
- *
- * L'état existant est attribué au plus ancien compte ADMIN — le seul à avoir pu
- * produire des cuissons sur un catalogue en écriture admin. `down()` le rend au
- * même compte ; l'état des autres comptes, lui, est perdu.
  */
 export class MoveMealStateToUser1786000000000 implements MigrationInterface {
   name = 'MoveMealStateToUser1786000000000';

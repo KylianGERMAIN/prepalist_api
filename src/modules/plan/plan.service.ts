@@ -56,16 +56,14 @@ export class PlanService {
     const plan = await this.ensure(userId, SLOT_RELATIONS);
     // Favori, note et cuissons appartiennent au compte, pas à la recette : sans
     // cette passe les créneaux les rendraient à leurs valeurs par défaut.
-    const meals = plan.slots
-      .map((slot) => slot.meal)
-      .filter((meal): meal is Meal => Boolean(meal));
-    this.state.attach(
-      meals,
-      await this.state.forUser(
-        userId,
-        meals.map((meal) => meal.id),
-      ),
+    const filled = plan.slots.filter(
+      (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
     );
+    const attached = await this.state.attachFor(
+      userId,
+      filled.map((slot) => slot.meal),
+    );
+    filled.forEach((slot, index) => (slot.meal = attached[index]));
     return plan;
   }
 
@@ -122,13 +120,7 @@ export class PlanService {
     if (meals.length === 0) {
       throw new BadRequestException('Aucune recette pour générer le plan');
     }
-    const candidates = this.state.attach(
-      meals,
-      await this.state.forUser(
-        userId,
-        meals.map((meal) => meal.id),
-      ),
-    );
+    const candidates = await this.state.attachFor(userId, meals);
 
     const placed = new Map<string, number>();
     const dinnerByDay = new Map<number, string>();

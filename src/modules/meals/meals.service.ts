@@ -73,12 +73,8 @@ export class MealsService {
       .take(query.limit)
       .getManyAndCount();
 
-    const states = await this.state.forUser(
-      userId,
-      items.map((meal) => meal.id),
-    );
     return new PaginatedDto(
-      this.state.attach(items, states),
+      await this.state.attachFor(userId, items),
       total,
       query.page,
       query.limit,
@@ -100,8 +96,7 @@ export class MealsService {
 
   async findOneFor(userId: string, id: string): Promise<MealView> {
     const meal = await this.findOne(id);
-    const states = await this.state.forUser(userId, [id]);
-    return this.state.attach([meal], states)[0];
+    return (await this.state.attachFor(userId, [meal]))[0];
   }
 
   /** `dto.ingredients` remplace la liste entière, il ne la complète pas. */

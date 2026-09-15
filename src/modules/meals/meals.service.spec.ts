@@ -14,8 +14,7 @@ describe('MealsService', () => {
   let mealIngredients: { create: jest.Mock };
   let ingredients: { find: jest.Mock };
   let state: {
-    forUser: jest.Mock;
-    attach: jest.Mock;
+    attachFor: jest.Mock;
     markCooked: jest.Mock;
     patch: jest.Mock;
   };
@@ -32,8 +31,7 @@ describe('MealsService', () => {
     mealIngredients = { create: jest.fn((x: unknown) => x) };
     ingredients = { find: jest.fn() };
     state = {
-      forUser: jest.fn().mockResolvedValue(new Map()),
-      attach: jest.fn((m: unknown) => m),
+      attachFor: jest.fn((_: unknown, meals: unknown) => meals),
       markCooked: jest.fn(),
       patch: jest.fn(),
     };
@@ -112,8 +110,7 @@ describe('MealsService', () => {
   it('findOneFor attaches the caller own state', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
     await service.findOneFor('u1', 'm1');
-    expect(state.forUser).toHaveBeenCalledWith('u1', ['m1']);
-    expect(state.attach).toHaveBeenCalled();
+    expect(state.attachFor).toHaveBeenCalledWith('u1', [{ id: 'm1' }]);
   });
 
   it('markCooked writes to the caller state, not to the meal', async () => {

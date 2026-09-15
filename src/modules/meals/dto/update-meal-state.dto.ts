@@ -1,9 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 export class UpdateMealStateDto {
   @ApiProperty({ required: false })
-  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined)
   @IsBoolean()
   isFavorite?: boolean;
 
