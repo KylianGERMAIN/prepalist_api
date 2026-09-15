@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
@@ -346,6 +350,15 @@ describe('ShoppingListService', () => {
       expect(res.checked).toBe(true);
     });
 
+    it('refuses an off-set unit on a DERIVED item', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await expect(
+        service.updateItem('u1', 'it1', { unit: 'grammes' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('allows name/quantity/unit edits on a DERIVED item', async () => {
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
@@ -353,11 +366,11 @@ describe('ShoppingListService', () => {
       const res = await service.updateItem('u1', 'it1', {
         name: 'Tomates cerises',
         quantity: 500,
-        unit: 'kg',
+        unit: 'pièce',
       });
       expect(res.name).toBe('Tomates cerises');
       expect(res.quantity).toBe(500);
-      expect(res.unit).toBe('kg');
+      expect(res.unit).toBe('pièce');
     });
 
     it('allows content edits on a MANUAL item', async () => {
@@ -408,7 +421,7 @@ describe('ShoppingListService', () => {
         } as unknown as Error),
       );
       await expect(
-        service.updateItem('u1', 'it1', { unit: 'kg' }),
+        service.updateItem('u1', 'it1', { unit: 'pièce' }),
       ).rejects.toThrow(ConflictException);
     });
   });

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -8,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { roundQuantity } from '../../common/quantity';
+import { Unit, UNITS } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -87,7 +89,7 @@ export class ShoppingListService {
     return new ShoppingListItemDto(saved);
   }
 
-  /** Un item DERIVED est éditable comme un MANUAL : la liste appartient à l'utilisateur. */
+  /** Un item DERIVED s'édite comme un MANUAL, son unité seule reste contrainte. */
   async updateItem(
     userId: string,
     itemId: string,
@@ -105,6 +107,17 @@ export class ShoppingListService {
       item.quantity = dto.quantity;
     }
     if (dto.unit !== undefined) {
+      // Un dérivé garde la clé (ingrédient, unité) que la synchro recalcule :
+      // une unité hors jeu lui ferait recréer une seconde ligne au prochain sync.
+      if (
+        item.source === ShoppingItemSource.DERIVED &&
+        dto.unit !== null &&
+        !UNITS.includes(dto.unit as Unit)
+      ) {
+        throw new BadRequestException(
+          `Unité invalide pour un item dérivé : ${UNITS.join(', ')}`,
+        );
+      }
       item.unit = dto.unit;
     }
 
