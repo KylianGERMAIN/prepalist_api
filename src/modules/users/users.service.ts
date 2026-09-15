@@ -13,17 +13,14 @@ export class UsersService {
     @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
-  /** Normalise un email pour comparaison/stockage insensible à la casse. */
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
 
-  /** Recherche un utilisateur par email (null si absent). */
   findByEmail(email: string): Promise<User | null> {
     return this.users.findOne({ where: { email: this.normalizeEmail(email) } });
   }
 
-  /** Récupère un utilisateur par id ou lève NotFoundException. */
   async findById(id: string): Promise<User> {
     const user = await this.users.findOne({ where: { id } });
     if (!user) {
@@ -32,14 +29,12 @@ export class UsersService {
     return user;
   }
 
-  /** Met à jour le jour de courses de l'utilisateur et renvoie l'entité à jour. */
   async updateShoppingDay(id: string, shoppingDay: number): Promise<User> {
     const user = await this.findById(id);
     user.shoppingDay = shoppingDay;
     return this.users.save(user);
   }
 
-  /** Crée un utilisateur ; lève ConflictException si l'email existe déjà. */
   async create(
     email: string,
     passwordHash: string,

@@ -1,16 +1,23 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MealStatus } from '../entities/meal.entity';
 
-/**
- * Aperçu d'un repas pour la liste GET /meals : tous les champs de Meal SAUF
- * `ingredients` (la liste ne les charge pas — voir findAll). Le détail
- * GET /meals/:id renvoie le `Meal` complet.
- */
+/** `ingredients` absent par choix : seul GET /meals/:id les charge. */
 export class MealSummaryDto {
   @ApiProperty()
   id!: string;
 
   @ApiProperty()
   name!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Compte propriétaire, null pour une recette de l’application.',
+  })
+  userId!: string | null;
+
+  @ApiProperty({ enum: MealStatus })
+  status!: MealStatus;
 
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })
   rating!: number | null;

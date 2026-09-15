@@ -5,7 +5,7 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AuthUser } from '../../../common/decorators/current-user.decorator';
 import { JwtPayload } from '../../token/token.service';
 
-/** Valide l'access token et expose l'utilisateur sur `req.user`. */
+/** Le retour de `validate` est ce que Passport pose sur `req.user`. */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {

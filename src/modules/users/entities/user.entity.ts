@@ -30,7 +30,7 @@ export class User {
 
   @ApiProperty({
     description:
-      'Jour de courses (0 = dimanche … 6 = samedi) : borne le début de la semaine de planning. Défaut 1 (lundi).',
+      'Jour de courses, 0 = dimanche … 6 = samedi. Borne le début de la semaine de planning.',
     minimum: 0,
     maximum: 6,
   })

@@ -46,6 +46,7 @@ describe('PlanService', () => {
   let slots: { create: jest.Mock; save: jest.Mock; update: jest.Mock };
   let meals: { find: jest.Mock; findOne: jest.Mock };
   let users: { findById: jest.Mock };
+  let state: { attachFor: jest.Mock };
   let manager: { update: jest.Mock; delete: jest.Mock };
   let transaction: jest.Mock;
 
@@ -67,10 +68,12 @@ describe('PlanService', () => {
     };
     meals = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
     users = { findById: jest.fn().mockResolvedValue({ shoppingDay: 2 }) };
+    state = { attachFor: jest.fn((_: unknown, meals: unknown) => meals) };
     service = new PlanService(
       plans as never,
       slots as never,
       meals as never,
+      state as never,
       users as never,
     );
   });
@@ -86,7 +89,17 @@ describe('PlanService', () => {
     it('cherche par utilisateur seul : aucune date en critère', async () => {
       plans.findOne.mockResolvedValue(planOf([]));
       await service.ensureForUser('u1');
-      expect(plans.findOne).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+      expect(plans.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: 'u1' } }),
+      );
+    });
+
+    it('charge les repas des créneaux sans leurs ingrédients', async () => {
+      plans.findOne.mockResolvedValue(planOf([]));
+      await service.ensureForUser('u1');
+      expect(plans.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ relations: { slots: { meal: true } } }),
+      );
     });
 
     it('crée un plan de 7 jours × 2 créneaux au premier accès', async () => {

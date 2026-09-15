@@ -8,7 +8,6 @@ import {
 import { Request } from 'express';
 import { Observable, tap } from 'rxjs';
 
-/** Log une ligne par requête HTTP avec méthode, URL, durée et request-id. */
 @Injectable()
 export class LoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger('HTTP');

@@ -9,6 +9,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: prepalist
+          POSTGRES_PASSWORD: prepalist
+          POSTGRES_DB: prepalist
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prepalist -d prepalist"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,5 +40,13 @@ jobs:
       - run: pnpm lint:ci
 
       - run: pnpm test
+
+      # La base de test est créée et migrée par test/global-setup.ts.
+      - run: pnpm test:e2e
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: prepalist
+          DB_PASSWORD: prepalist
 
       - run: pnpm build

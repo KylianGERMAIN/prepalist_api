@@ -1,45 +1,26 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { requestId } from './common/middleware/request-id.middleware';
+import { isProduction } from './common/environment';
 import { APP_VERSION } from './common/version';
+import { configureApp } from './common/configure-app';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.use(helmet());
-  app.use(requestId);
+  configureApp(app);
 
-  // CORS : origins via CORS_ORIGINS (liste séparée par des virgules).
-  // Vide -> reflète l'origin (tous), acceptable en local ; à restreindre en prod.
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-  app.enableCors({
-    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
-    credentials: true,
-  });
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-  app.useGlobalFilters(new AllExceptionsFilter());
-
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('PrepaList API')
-    .setDescription('API meal-prep PrepaList v2')
-    .setVersion(APP_VERSION)
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
+  // `/docs-json` est une route non authentifiée qui livre toute la surface d'API.
+  if (!isProduction(process.env.NODE_ENV)) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('PrepaList API')
+      .setDescription('API meal-prep PrepaList v2')
+      .setVersion(APP_VERSION)
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

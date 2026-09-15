@@ -5,6 +5,38 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.5.0] - 2026-09-15
+
+### Corrigé
+
+- **Favori, note et historique de cuisson appartiennent au compte** : ces quatre colonnes étaient portées par `meals`, un catalogue partagé par tous les comptes. Marquer un plat « cuisiné » écrivait donc sur la ligne que tous les autres lisent, et biaisait le score de fraîcheur de leur génération de plan. Elles passent dans `user_meal_state`, clé `(user_id, meal_id)`. L'incrément de `times_cooked` se fait en SQL, deux cuissons concurrentes ne s'écrasent plus.
+
+### Ajouté
+
+- **`PATCH /meals/:id/state`** : favori et note du compte appelant, ouvert à tous les comptes — contrairement à `PATCH /meals/:id`, qui reste réservé à l'admin puisqu'il modifie la recette.
+
+### Modifié
+
+- **`rating` et `isFavorite` sortent du corps de `POST /meals` et `PATCH /meals/:id`** (cassant) : la validation étant stricte, les envoyer rend désormais 400 au lieu d'être ignoré. Ils passent par `PATCH /meals/:id/state`.
+- **Migration destructrice** : l'historique de cuisson, les favoris et les notes existants sont fusionnés sur le plus ancien compte ADMIN. `POST /meals/:id/cooked` ayant toujours été ouvert à tout compte authentifié, l'état antérieur n'est pas attribuable à son auteur ; celui des autres comptes est perdu.
+
+- **Profondeur de relation déclarée par site d'appel** : le chargement des relations du plan n'est plus eager. Chaque appel demande ce dont il a besoin, la liste de courses seule chargeant les ingrédients.
+
+### Sécurité
+
+- **`POST /ingredients` réservé à l'admin** (cassant) : la route alimentait le catalogue commun d'ingrédients sans garde de rôle. Les comptes standard reçoivent désormais 403.
+- **Swagger coupé en production** : `/docs` et `/docs-json` publiaient toute la surface de l'API sur une route non authentifiée. Ils ne sont plus montés quand `NODE_ENV` vaut `production`.
+- **CORS fermé par défaut en production** (cassant) : un `CORS_ORIGINS` vide retombait sur `origin: true`, qui reflète l'origine appelante, combiné à `credentials: true`. Sans `CORS_ORIGINS`, plus aucune origine n'est autorisée. Sans effet sur le front, qui appelle l'API côté serveur.
+
+### Corrigé
+
+- **Arrondi de l'agrégation de la liste de courses** extrait et couvert par des tests.
+
+### Interne
+
+- **Suite e2e sur une vraie base**, branchée dans la CI.
+- **Index et noms de contrainte existants déclarés dans les entités**, pour que le schéma généré corresponde à celui de la base.
+
 ## [0.4.0] - 2026-08-05
 
 ### Modifié

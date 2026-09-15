@@ -5,9 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DeepPartial, Repository } from 'typeorm';
+import { DeepPartial, FindOptionsRelations, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
+import { MealStateService, MealView } from '../meals/meal-state.service';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -22,6 +23,10 @@ const MS_PER_DAY = 86_400_000;
 const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
+const SLOT_RELATIONS = { slots: { meal: true } } as const;
+const INGREDIENT_RELATIONS = {
+  slots: { meal: { ingredients: { ingredient: true } } },
+} as const;
 
 @Injectable()
 export class PlanService {
@@ -30,10 +35,10 @@ export class PlanService {
     @InjectRepository(PlanSlot)
     private readonly slots: Repository<PlanSlot>,
     @InjectRepository(Meal) private readonly meals: Repository<Meal>,
+    private readonly state: MealStateService,
     private readonly users: UsersService,
   ) {}
 
-  /** Créneaux vides d'un plan : `dayCount` jours × (midi, soir). */
   private buildSlots(dayCount: number): PlanSlot[] {
     const slots: PlanSlot[] = [];
     for (let dayIndex = 0; dayIndex < dayCount; dayIndex++) {
@@ -46,12 +51,32 @@ export class PlanService {
     return slots;
   }
 
-  /**
-   * Plan courant de l'utilisateur, créé vide au premier accès. Il n'y a jamais
-   * qu'un plan par compte : aucune date n'est nécessaire pour le retrouver.
-   */
+  /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
-    const existing = await this.plans.findOne({ where: { userId } });
+    const plan = await this.ensure(userId, SLOT_RELATIONS);
+    // Favori, note et cuissons appartiennent au compte, pas à la recette : sans
+    // cette passe les créneaux les rendraient à leurs valeurs par défaut.
+    const filled = plan.slots.filter(
+      (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
+    );
+    const attached = await this.state.attachFor(
+      userId,
+      filled.map((slot) => slot.meal),
+    );
+    filled.forEach((slot, index) => (slot.meal = attached[index]));
+    return plan;
+  }
+
+  /** Même plan, avec de quoi agréger la liste de courses. */
+  async ensureForUserWithIngredients(userId: string): Promise<Plan> {
+    return this.ensure(userId, INGREDIENT_RELATIONS);
+  }
+
+  private async ensure(
+    userId: string,
+    relations: FindOptionsRelations<Plan>,
+  ): Promise<Plan> {
+    const existing = await this.plans.findOne({ where: { userId }, relations });
     if (existing) {
       return existing;
     }
@@ -66,40 +91,36 @@ export class PlanService {
     try {
       return await this.plans.save(plan);
     } catch (err) {
-      // Course sur le premier accès : deux requêtes concurrentes passent le
-      // findOne avant l'insert. L'unicité (user_id) fait échouer la seconde en
-      // 23505 ; on relit le plan gagnant plutôt que de remonter un 500.
+      // Course au premier accès : deux requêtes passent le findOne avant l'insert,
+      // l'unicité (user_id) fait échouer la seconde.
       if (isUniqueViolation(err)) {
-        const winner = await this.plans.findOne({ where: { userId } });
+        const winner = await this.plans.findOne({
+          where: { userId },
+          relations,
+        });
         if (winner) {
           return winner;
         }
-        // Conflit d'unicité mais plus de plan à relire : le compte a disparu
-        // entre les deux (CASCADE). Un 409 décrit la situation, là où le
-        // QueryFailedError brut remonterait un 500 sur un conflit résolu.
+        // Conflit mais plus rien à relire : le compte a disparu entre les deux (CASCADE).
         throw new ConflictException('Plan indisponible, réessaie');
       }
       throw err;
     }
   }
 
-  /** Premier jour à retenir pour un plan neuf : dernier jour de courses passé. */
   private async anchorFor(userId: string): Promise<string> {
     const { shoppingDay } = await this.users.findById(userId);
     return lastWeekdayOnOrBefore(today(), shoppingDay);
   }
 
-  /**
-   * Remplit les créneaux **vides** par tirage pondéré (favori + fraîcheur −
-   * doublon) ; les créneaux déjà assignés (manuellement) sont préservés.
-   * Règle meal-prep : le dîner du jour J peut alimenter le déjeuner du jour J+1.
-   */
+  /** Ne remplit que les créneaux vides : une assignation manuelle n'est jamais écrasée. */
   async generate(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
-    const candidates = await this.meals.find();
-    if (candidates.length === 0) {
+    const meals = await this.meals.find();
+    if (meals.length === 0) {
       throw new BadRequestException('Aucune recette pour générer le plan');
     }
+    const candidates = await this.state.attachFor(userId, meals);
 
     const placed = new Map<string, number>();
     const dinnerByDay = new Map<number, string>();
@@ -107,7 +128,6 @@ export class PlanService {
     const changed: PlanSlot[] = [];
 
     for (const slot of ordered) {
-      // Préserve une assignation existante et la prend en compte (doublons + restes).
       if (slot.mealId) {
         placed.set(slot.mealId, (placed.get(slot.mealId) ?? 0) + 1);
         if (slot.slot === MealSlot.DINNER) {
@@ -134,8 +154,8 @@ export class PlanService {
       changed.push(slot);
     }
 
-    // Persiste uniquement la colonne FK des créneaux modifiés (sans l'objet
-    // relation `meal` chargé en eager, qui sinon écraserait le mealId au save).
+    // La seule colonne FK, sans la relation `meal` : chargée, elle écraserait au
+    // save le mealId qu'on vient de poser.
     if (changed.length > 0) {
       await this.slots.save(
         changed.map((s) => ({
@@ -147,7 +167,6 @@ export class PlanService {
     return this.ensureForUser(userId);
   }
 
-  /** Met à jour un créneau (repas / portions) du plan de l'utilisateur. */
   async updateSlot(
     userId: string,
     slotId: string,
@@ -179,26 +198,16 @@ export class PlanService {
   }
 
   /**
-   * Vide le plan : tous les créneaux repassent à vide, les items **dérivés** de la
-   * liste sont supprimés et `startDate` est réancré sur le dernier jour de
-   * courses. Les items MANUAL survivent — ils n'ont jamais été déduits des plats,
-   * rien dans le plan ne les justifie ni ne les périme.
-   *
-   * Purge ici plutôt que dans `sync`, qui est insert-only par conception et ne
-   * supprime jamais un item existant.
-   *
-   * Le réancrage a lieu ici et nulle part ailleurs : c'est le seul geste qui
-   * marque le début d'un nouveau cycle, donc le seul moment où l'ancre doit
-   * bouger. Les GET écrivent (création du plan, init de la liste) mais ne
-   * déplacent jamais l'ancre.
+   * Vide les créneaux et les items DERIVED ; les MANUAL survivent.
+   * Seul geste qui déplace `startDate` — aucun autre appel ne réancre le plan.
    */
   async clearSlots(userId: string): Promise<Plan> {
     const plan = await this.ensureForUser(userId);
     const startDate = await this.anchorFor(userId);
 
-    // Les trois écritures forment un tout : des créneaux vidés avec des dérivés
-    // survivants afficheraient les ingrédients d'un plan qui n'existe plus, et
-    // l'init paresseuse ne rattraperait pas (elle exige une liste vide).
+    // Atomique : des créneaux vidés avec des dérivés survivants afficheraient les
+    // ingrédients d'un plan disparu, et l'init paresseuse exige une liste vide pour
+    // rattraper.
     await this.plans.manager.transaction(async (manager) => {
       await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
       await manager.delete(ShoppingListItem, {
@@ -211,7 +220,6 @@ export class PlanService {
     return this.ensureForUser(userId);
   }
 
-  /** Ordonne les créneaux : jour croissant, puis midi avant soir. */
   private compareSlots = (a: PlanSlot, b: PlanSlot): number => {
     if (a.dayIndex !== b.dayIndex) {
       return a.dayIndex - b.dayIndex;
@@ -219,8 +227,7 @@ export class PlanService {
     return a.slot === b.slot ? 0 : a.slot === MealSlot.LUNCH ? -1 : 1;
   };
 
-  /** Tirage pondéré : favori + note + fraîcheur, fortement pénalisé si déjà placé. */
-  private pickWeighted(meals: Meal[], placed: Map<string, number>): string {
+  private pickWeighted(meals: MealView[], placed: Map<string, number>): string {
     const weights = meals.map(
       (meal) => this.baseScore(meal) * Math.pow(0.2, placed.get(meal.id) ?? 0),
     );
@@ -236,15 +243,15 @@ export class PlanService {
     return meals[meals.length - 1].id;
   }
 
-  /** Score de base d'une recette (toujours > 0). */
-  private baseScore(meal: Meal): number {
+  /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
+  private baseScore(meal: MealView): number {
     const favorite = meal.isFavorite ? 2 : 0;
     const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
     const freshness = this.freshnessScore(meal.lastCookedAt); // 0 … 2
     return 1 + favorite + rating + freshness;
   }
 
-  /** Plus la recette n'a pas été cuisinée depuis longtemps, plus elle remonte. */
+  /** Croît avec l'ancienneté. */
   private freshnessScore(lastCookedAt: Date | null): number {
     if (!lastCookedAt) {
       return 2; // jamais cuisinée -> priorité max

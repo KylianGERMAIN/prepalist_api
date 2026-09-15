@@ -9,7 +9,6 @@ import { UserRole } from '../../modules/users/entities/user.entity';
 import { AuthUser } from '../decorators/current-user.decorator';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
-/** Autorise l'accès si l'utilisateur possède l'un des rôles requis. */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}

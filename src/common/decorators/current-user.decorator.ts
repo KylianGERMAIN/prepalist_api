@@ -6,7 +6,6 @@ export interface AuthUser {
   role: string;
 }
 
-/** Injecte l'utilisateur authentifié (ou une de ses propriétés) dans un handler. */
 export const CurrentUser = createParamDecorator(
   (data: keyof AuthUser | undefined, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest<{ user?: AuthUser }>();

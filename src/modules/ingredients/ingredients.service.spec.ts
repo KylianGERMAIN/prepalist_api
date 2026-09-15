@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { IngredientsService } from './ingredients.service';
 
 describe('IngredientsService', () => {
@@ -57,7 +58,9 @@ describe('IngredientsService', () => {
 
   it('create maps a unique-violation race (23505) to ConflictException', async () => {
     mockExisting(null);
-    repo.save.mockRejectedValue({ driverError: { code: '23505' } });
+    repo.save.mockRejectedValue(
+      new QueryFailedError('INSERT', [], { code: '23505' } as never),
+    );
     await expect(service.create({ name: 'Tomate' })).rejects.toThrow(
       ConflictException,
     );

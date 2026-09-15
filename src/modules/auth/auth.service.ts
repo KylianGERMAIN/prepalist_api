@@ -15,14 +15,12 @@ export class AuthService {
     private readonly tokens: TokenService,
   ) {}
 
-  /** Crée un compte et renvoie une paire de tokens. */
   async register(dto: RegisterDto): Promise<TokenPair> {
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
     const user = await this.users.create(dto.email, passwordHash);
     return this.tokens.issueTokens(user);
   }
 
-  /** Authentifie par email/mot de passe ; lève si invalide. */
   async login(dto: LoginDto): Promise<TokenPair> {
     const user = await this.users.findByEmail(dto.email);
     if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
@@ -31,7 +29,6 @@ export class AuthService {
     return this.tokens.issueTokens(user);
   }
 
-  /** Renouvelle la paire de tokens à partir d'un refresh token valide. */
   async refresh(refreshToken: string): Promise<TokenPair> {
     let payload: JwtPayload;
     try {

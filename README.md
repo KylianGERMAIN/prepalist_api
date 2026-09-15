@@ -15,7 +15,7 @@ cp .env.example .env          # ajuster les secrets JWT
 docker compose up -d          # Postgres 16 sur :5432
 pnpm install
 pnpm migration:run            # crée le schéma
-pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
+pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs (hors prod)
 ```
 
 ## Scripts
@@ -25,7 +25,8 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs
 | `pnpm start:dev` | API en watch |
 | `pnpm build` | compilation TS → `dist/` |
 | `pnpm lint` | ESLint + Prettier (fix) |
-| `pnpm test` | specs Jest |
+| `pnpm test` | specs Jest, sans base |
+| `pnpm test:e2e` | tests d'intégration sur la base `prepalist_test`, créée et migrée automatiquement (Postgres doit tourner) |
 | `pnpm migration:generate src/migrations/<Nom>` | génère une migration depuis les entities |
 | `pnpm migration:run` / `pnpm migration:revert` | applique / annule |
 

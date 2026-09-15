@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { User, UserRole } from '../entities/user.entity';
 
-/** Vue publique du profil courant : jamais de passwordHash. */
+/** N'expose jamais `passwordHash`. */
 export class MeDto {
   @ApiProperty()
   id: string;
