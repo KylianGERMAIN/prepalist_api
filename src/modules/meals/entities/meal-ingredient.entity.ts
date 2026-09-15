@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { numericTransformer } from '../../../common/transformers/numeric.transformer';
+import { Unit } from '../../../common/unit';
 import { Ingredient } from '../../ingredients/entities/ingredient.entity';
 import { Meal } from './meal.entity';
 
@@ -48,7 +49,7 @@ export class MealIngredient {
   @Column({ type: 'numeric', transformer: numericTransformer })
   quantity!: number;
 
-  @ApiProperty()
-  @Column()
-  unit!: string;
+  @ApiProperty({ enum: Unit })
+  @Column({ type: 'enum', enum: Unit, enumName: 'unit_enum' })
+  unit!: Unit;
 }
