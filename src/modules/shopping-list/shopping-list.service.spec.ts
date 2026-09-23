@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
@@ -350,27 +345,27 @@ describe('ShoppingListService', () => {
       expect(res.checked).toBe(true);
     });
 
-    it('refuses an off-set unit on a DERIVED item', async () => {
+    it('refuses a unit change on a DERIVED item', async () => {
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
       await expect(
-        service.updateItem('u1', 'it1', { unit: 'grammes' }),
+        service.updateItem('u1', 'it1', { unit: 'pièce' }),
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('allows name/quantity/unit edits on a DERIVED item', async () => {
+    it('allows name/quantity edits on a DERIVED item, unit resent unchanged', async () => {
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
       const res = await service.updateItem('u1', 'it1', {
         name: 'Tomates cerises',
         quantity: 500,
-        unit: 'pièce',
+        unit: 'g',
       });
       expect(res.name).toBe('Tomates cerises');
       expect(res.quantity).toBe(500);
-      expect(res.unit).toBe('pièce');
+      expect(res.unit).toBe('g');
     });
 
     it('allows content edits on a MANUAL item', async () => {
@@ -409,20 +404,6 @@ describe('ShoppingListService', () => {
       expect(items.findOne).toHaveBeenCalledWith({
         where: { id: 'it1', plan: { userId: 'u1' } },
       });
-    });
-
-    it('maps a unique-index violation (23505) to a 409', async () => {
-      items.findOne.mockResolvedValue(
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
-      );
-      items.save.mockRejectedValue(
-        new QueryFailedError('update', [], {
-          code: '23505',
-        } as unknown as Error),
-      );
-      await expect(
-        service.updateItem('u1', 'it1', { unit: 'pièce' }),
-      ).rejects.toThrow(ConflictException);
     });
   });
 

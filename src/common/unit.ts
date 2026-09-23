@@ -12,5 +12,3 @@ export enum Unit {
   TABLESPOON = 'c.à.s',
   TEASPOON = 'c.à.c',
 }
-
-export const UNITS = Object.values(Unit);

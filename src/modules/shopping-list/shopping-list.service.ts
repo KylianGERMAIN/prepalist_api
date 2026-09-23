@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -9,7 +8,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { roundQuantity } from '../../common/quantity';
-import { Unit, UNITS } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -89,7 +87,6 @@ export class ShoppingListService {
     return new ShoppingListItemDto(saved);
   }
 
-  /** Un item DERIVED s'édite comme un MANUAL, son unité seule reste contrainte. */
   async updateItem(
     userId: string,
     itemId: string,
@@ -107,33 +104,21 @@ export class ShoppingListService {
       item.quantity = dto.quantity;
     }
     if (dto.unit !== undefined) {
-      // Un dérivé garde la clé (ingrédient, unité) que la synchro recalcule :
-      // une unité hors jeu lui ferait recréer une seconde ligne au prochain sync.
+      // La synchro retrouve un dérivé par (ingrédient, unité) : changer l'unité
+      // lui ferait recréer une seconde ligne au prochain sync.
       if (
         item.source === ShoppingItemSource.DERIVED &&
-        dto.unit !== null &&
-        !UNITS.includes(dto.unit as Unit)
+        dto.unit !== item.unit
       ) {
         throw new BadRequestException(
-          `Unité invalide pour un item dérivé : ${UNITS.join(', ')}`,
+          "L'unité d'un item dérivé suit la recette et ne se modifie pas",
         );
       }
       item.unit = dto.unit;
     }
 
-    try {
-      const saved = await this.items.save(item);
-      return new ShoppingListItemDto(saved);
-    } catch (err) {
-      // Éditer un DERIVED peut amener sa clé (ingredientId, unit) sur celle d'un
-      // autre dérivé, et collisionner l'index unique partiel.
-      if (isUniqueViolation(err)) {
-        throw new ConflictException(
-          'Un item dérivé identique (ingrédient + unité) existe déjà',
-        );
-      }
-      throw err;
-    }
+    const saved = await this.items.save(item);
+    return new ShoppingListItemDto(saved);
   }
 
   async removeItem(userId: string, itemId: string): Promise<void> {

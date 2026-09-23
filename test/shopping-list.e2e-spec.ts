@@ -120,15 +120,19 @@ describe('Liste de courses (e2e)', () => {
     expect(after.body.items[0].quantity).toBe(999);
   });
 
-  // La clé d'un dérivé est (ingrédient, unité) et la synchro la recalcule : une
-  // unité hors jeu lui ferait recréer une seconde ligne au sync suivant.
-  it('refuse une unité hors jeu sur un item dérivé', async () => {
+  it('refuse de changer l’unité d’un item dérivé', async () => {
     const list = await getList();
 
     await request(app.getHttpServer())
       .patch(`/plan/shopping-list/items/${list.body.items[0].id}`)
       .set(...bearer(user))
-      .send({ unit: 'grammes' })
+      .send({ unit: 'pièce' })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .patch(`/plan/shopping-list/items/${list.body.items[0].id}`)
+      .set(...bearer(user))
+      .send({ unit: null })
       .expect(400);
   });
 
