@@ -119,4 +119,80 @@ describe('Liste de courses (e2e)', () => {
     const after = await getList();
     expect(after.body.items[0].quantity).toBe(999);
   });
+
+  const patchItem = (id: string, body: object) =>
+    request(app.getHttpServer())
+      .patch(`/plan/shopping-list/items/${id}`)
+      .set(...bearer(user))
+      .send(body);
+
+  const sync = () =>
+    request(app.getHttpServer())
+      .post('/plan/shopping-list/sync')
+      .set(...bearer(user))
+      .expect(200);
+
+  it('change l’unité d’un item dérivé dans le jeu fermé seulement', async () => {
+    const [, tomate] = (await getList()).body.items;
+
+    await patchItem(tomate.id, { unit: 'pièce' }).expect(200);
+    await patchItem(tomate.id, { unit: 'tranches' }).expect(400);
+    await patchItem(tomate.id, { unit: null }).expect(400);
+  });
+
+  it('réécrit les dérivés au sync avec l’unité de la recette, sans doublon', async () => {
+    const [, tomate] = (await getList()).body.items;
+    await patchItem(tomate.id, {
+      unit: 'pièce',
+      quantity: 3,
+      checked: true,
+    }).expect(200);
+
+    const res = await sync();
+
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items[1]).toMatchObject({
+      name: 'Tomate',
+      unit: 'g',
+      quantity: 250,
+      checked: false,
+    });
+  });
+
+  it('ramène au sync un dérivé supprimé et garde les manuels', async () => {
+    const [basilic] = (await getList()).body.items;
+    await request(app.getHttpServer())
+      .delete(`/plan/shopping-list/items/${basilic.id}`)
+      .set(...bearer(user))
+      .expect(204);
+    await request(app.getHttpServer())
+      .post('/plan/shopping-list/items')
+      .set(...bearer(user))
+      .send({ name: 'Éponges', quantity: 2, unit: 'pièce' })
+      .expect(201);
+
+    const res = await sync();
+
+    expect(res.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Basilic',
+      'Éponges',
+      'Tomate',
+    ]);
+  });
+
+  it('impose le jeu fermé à l’unité d’un item manuel', async () => {
+    const add = (unit?: string) =>
+      request(app.getHttpServer())
+        .post('/plan/shopping-list/items')
+        .set(...bearer(user))
+        .send({ name: 'Éponges', quantity: 2, unit });
+
+    await add().expect(400);
+    await add('sachet').expect(400);
+    const created = await add('pièce').expect(201);
+
+    await patchItem(created.body.id as string, { unit: 'lot' }).expect(400);
+    await patchItem(created.body.id as string, { unit: null }).expect(400);
+    await patchItem(created.body.id as string, { unit: 'boîte' }).expect(200);
+  });
 });

@@ -1,5 +1,10 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
+import { Unit } from '../../common/unit';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
@@ -48,10 +53,9 @@ describe('ShoppingListService', () => {
     ensureForUserWithIngredients: jest.Mock;
   };
   let txRepo: {
-    find: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
-    remove: jest.Mock;
+    delete: jest.Mock;
   };
   let items: {
     count: jest.Mock;
@@ -74,10 +78,9 @@ describe('ShoppingListService', () => {
       planService.ensureForUser(),
     );
     txRepo = {
-      find: jest.fn().mockResolvedValue([]),
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
       save: jest.fn((x: unknown) => x),
-      remove: jest.fn(),
+      delete: jest.fn(),
     };
     items = {
       count: jest.fn(),
@@ -168,118 +171,62 @@ describe('ShoppingListService', () => {
     });
   });
 
-  describe('sync (insert-only)', () => {
-    it('inserts only the ingredients that are absent', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: {
-              ingredients: [
-                mi('i1', 'Tomate', 'g', 250),
-                mi('i9', 'Basilic', 'g', 10),
-              ],
-            },
-          },
-        ]),
-      );
-      // i1 déjà présent -> seul i9 doit être inséré.
-      txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+  describe('sync (rewrite)', () => {
+    const tomatoPlan = () =>
+      plan([
+        {
+          servings: 1,
+          meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
+        },
       ]);
+
+    it('deletes only the DERIVED items of the plan, never the MANUAL ones', async () => {
+      planService.ensureForUser.mockResolvedValue(tomatoPlan());
 
       await service.sync('u1');
 
-      expect(txRepo.create).toHaveBeenCalledTimes(1);
-      expect(txRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          ingredientId: 'i9',
-          name: 'Basilic',
-          quantity: 10,
-          checked: false,
-          source: ShoppingItemSource.DERIVED,
-        }),
-      );
-    });
-
-    it('does not touch the quantity of an existing item edited by the user', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      // Quantité éditée à 999 par l'utilisateur : le sync ne doit pas la réécrire.
-      txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 999),
-      ]);
-
-      await service.sync('u1');
-
-      expect(txRepo.create).not.toHaveBeenCalled();
-      expect(txRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('never touches checked nor manual items', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      const checkedDerived = derivedItem('it1', 'i1', 'g', 'Tomate', 250, true);
-      const manual = {
-        id: 'itM',
+      expect(txRepo.delete).toHaveBeenCalledWith({
         planId: 'p1',
-        source: ShoppingItemSource.MANUAL,
-        ingredientId: null,
-        unit: 'lot',
-        name: 'Éponges',
-        quantity: 2,
-        checked: true,
-      };
-      txRepo.find.mockResolvedValue([checkedDerived, manual]);
-
-      await service.sync('u1');
-
-      expect(txRepo.create).not.toHaveBeenCalled();
-      expect(txRepo.save).not.toHaveBeenCalled();
-      expect(txRepo.remove).not.toHaveBeenCalled();
+        source: ShoppingItemSource.DERIVED,
+      });
     });
 
-    it('is a no-op when the meals bring no new ingredient', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      txRepo.find.mockResolvedValue([
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
-      ]);
+    it('recreates every line from the meals, unchecked, with the recipe unit', async () => {
+      planService.ensureForUser.mockResolvedValue(tomatoPlan());
 
       await service.sync('u1');
 
+      expect(txRepo.create).toHaveBeenCalledWith({
+        planId: 'p1',
+        source: ShoppingItemSource.DERIVED,
+        ingredientId: 'i1',
+        name: 'Tomate',
+        unit: 'g',
+        quantity: 250,
+        checked: false,
+      });
+      expect(txRepo.delete.mock.invocationCallOrder[0]).toBeLessThan(
+        txRepo.save.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('empties the derived items when the plan has no meal left', async () => {
+      planService.ensureForUser.mockResolvedValue(plan([]));
+
+      await service.sync('u1');
+
+      expect(txRepo.delete).toHaveBeenCalled();
       expect(txRepo.save).not.toHaveBeenCalled();
     });
 
-    it('compares against all current items, not only DERIVED', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
+    it('swallows the unique violation of a concurrent sync, then reads', async () => {
+      planService.ensureForUser.mockResolvedValue(tomatoPlan());
+      txRepo.save.mockRejectedValue(
+        new QueryFailedError('INSERT', [], { code: '23505' } as never),
       );
-      await service.sync('u1');
-      expect(txRepo.find).toHaveBeenCalledWith({ where: { planId: 'p1' } });
+
+      await expect(service.sync('u1')).resolves.toBeDefined();
+      expect(items.find).toHaveBeenCalledWith({ where: { planId: 'p1' } });
     });
 
     it('propagates a write failure so the transaction rolls back', async () => {
@@ -291,7 +238,6 @@ describe('ShoppingListService', () => {
           },
         ]),
       );
-      txRepo.find.mockResolvedValue([]);
       txRepo.save.mockRejectedValue(new Error('write failed'));
 
       await expect(service.sync('u1')).rejects.toThrow('write failed');
@@ -304,7 +250,6 @@ describe('ShoppingListService', () => {
           { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.2)] } },
         ]),
       );
-      txRepo.find.mockResolvedValue([]);
 
       await service.sync('u1');
 
@@ -320,7 +265,7 @@ describe('ShoppingListService', () => {
       await service.addItem('u1', {
         name: 'Éponges',
         quantity: 2,
-        unit: 'lot',
+        unit: Unit.BOX,
       });
       expect(items.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -328,7 +273,7 @@ describe('ShoppingListService', () => {
           ingredientId: null,
           name: 'Éponges',
           quantity: 2,
-          unit: 'lot',
+          unit: 'boîte',
           checked: false,
         }),
       );
@@ -346,18 +291,84 @@ describe('ShoppingListService', () => {
       expect(res.checked).toBe(true);
     });
 
-    it('allows name/quantity/unit edits on a DERIVED item', async () => {
+    it('lets a DERIVED item take another unit of the closed set', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'pièce', 'Avocat', 5),
+      );
+      const res = await service.updateItem('u1', 'it1', { unit: 'gousse' });
+      expect(res.unit).toBe('gousse');
+    });
+
+    it('allows name/quantity edits on a DERIVED item, unit resent unchanged', async () => {
       items.findOne.mockResolvedValue(
         derivedItem('it1', 'i1', 'g', 'Tomate', 250),
       );
       const res = await service.updateItem('u1', 'it1', {
         name: 'Tomates cerises',
         quantity: 500,
-        unit: 'kg',
+        unit: 'g',
       });
       expect(res.name).toBe('Tomates cerises');
       expect(res.quantity).toBe(500);
-      expect(res.unit).toBe('kg');
+      expect(res.unit).toBe('g');
+    });
+
+    it.each(['gousses', 'sachet', null])(
+      'refuses the unit %p on a DERIVED item',
+      async (unit) => {
+        items.findOne.mockResolvedValue(
+          derivedItem('it1', 'i1', 'pièce', 'Avocat', 5),
+        );
+        await expect(
+          service.updateItem('u1', 'it1', { unit: unit as string }),
+        ).rejects.toThrow(BadRequestException);
+      },
+    );
+
+    it('409s when the new unit collides with another derived line', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'pièce', 'Avocat', 5),
+      );
+      items.save.mockRejectedValue(
+        new QueryFailedError('UPDATE', [], { code: '23505' } as never),
+      );
+      await expect(
+        service.updateItem('u1', 'it1', { unit: 'g' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    const manualItem = (unit: string | null) => ({
+      id: 'it9',
+      planId: 'p1',
+      source: ShoppingItemSource.MANUAL,
+      ingredientId: null,
+      unit,
+      name: 'Éponges',
+      quantity: 2,
+      checked: false,
+    });
+
+    it('refuses a free unit on a MANUAL item', async () => {
+      items.findOne.mockResolvedValue(manualItem('pièce'));
+      await expect(
+        service.updateItem('u1', 'it9', { unit: 'sachet' }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('keeps a legacy MANUAL unit resent unchanged', async () => {
+      items.findOne.mockResolvedValue(manualItem('sachet'));
+      const res = await service.updateItem('u1', 'it9', {
+        name: 'Éponges vertes',
+        unit: 'sachet',
+      });
+      expect(res.unit).toBe('sachet');
+    });
+
+    it('refuses to clear the unit of a MANUAL item', async () => {
+      items.findOne.mockResolvedValue(manualItem('boîte'));
+      await expect(
+        service.updateItem('u1', 'it9', { unit: null as unknown as string }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('allows content edits on a MANUAL item', async () => {
@@ -396,20 +407,6 @@ describe('ShoppingListService', () => {
       expect(items.findOne).toHaveBeenCalledWith({
         where: { id: 'it1', plan: { userId: 'u1' } },
       });
-    });
-
-    it('maps a unique-index violation (23505) to a 409', async () => {
-      items.findOne.mockResolvedValue(
-        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
-      );
-      items.save.mockRejectedValue(
-        new QueryFailedError('update', [], {
-          code: '23505',
-        } as unknown as Error),
-      );
-      await expect(
-        service.updateItem('u1', 'it1', { unit: 'kg' }),
-      ).rejects.toThrow(ConflictException);
     });
   });
 

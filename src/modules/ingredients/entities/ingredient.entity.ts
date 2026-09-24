@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Unit } from '../../../common/unit';
 
 @Entity('ingredients')
 export class Ingredient {
@@ -12,7 +13,13 @@ export class Ingredient {
   @Column()
   name!: string;
 
-  @ApiProperty({ type: String, nullable: true })
-  @Column({ name: 'default_unit', nullable: true, type: 'varchar' })
-  defaultUnit!: string | null;
+  @ApiProperty({ enum: Unit, nullable: true })
+  @Column({
+    name: 'default_unit',
+    type: 'enum',
+    enum: Unit,
+    enumName: 'unit_enum',
+    nullable: true,
+  })
+  defaultUnit!: Unit | null;
 }

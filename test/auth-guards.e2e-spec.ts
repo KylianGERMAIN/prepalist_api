@@ -108,7 +108,7 @@ describe('Gardes d’autorisation (e2e)', () => {
       const item = await request(app.getHttpServer())
         .post('/plan/shopping-list/items')
         .set(...bearer(user))
-        .send({ name: 'Éponges', quantity: 2, unit: 'lot' })
+        .send({ name: 'Éponges', quantity: 2, unit: 'boîte' })
         .expect(201);
 
       await request(app.getHttpServer())
@@ -123,11 +123,53 @@ describe('Gardes d’autorisation (e2e)', () => {
         .expect(404);
     });
 
+    it('ne laisse pas le sync d’un compte toucher la liste d’un autre', async () => {
+      const admin = await registerAdmin(app, db);
+      const ingredient = await request(app.getHttpServer())
+        .post('/ingredients')
+        .set(...bearer(admin))
+        .send({ name: 'Tomate' })
+        .expect(201);
+      const meal = await request(app.getHttpServer())
+        .post('/meals')
+        .set(...bearer(admin))
+        .send({
+          name: 'Pâtes',
+          ingredients: [
+            { ingredientId: ingredient.body.id, quantity: 250, unit: 'g' },
+          ],
+        })
+        .expect(201);
+      const plan = await request(app.getHttpServer())
+        .get('/plan')
+        .set(...bearer(user))
+        .expect(200);
+      await request(app.getHttpServer())
+        .patch(`/plan/slots/${plan.body.slots[0].id}`)
+        .set(...bearer(user))
+        .send({ mealId: meal.body.id })
+        .expect(200);
+      const getList = () =>
+        request(app.getHttpServer())
+          .get('/plan/shopping-list')
+          .set(...bearer(user))
+          .expect(200);
+      const before = await getList();
+      expect(before.body.items).toHaveLength(1);
+
+      await request(app.getHttpServer())
+        .post('/plan/shopping-list/sync')
+        .set(...bearer(other))
+        .expect(200);
+
+      expect((await getList()).body.items).toEqual(before.body.items);
+    });
+
     it('ne laisse pas voir la liste d’un autre compte', async () => {
       await request(app.getHttpServer())
         .post('/plan/shopping-list/items')
         .set(...bearer(user))
-        .send({ name: 'Éponges', quantity: 2, unit: 'lot' })
+        .send({ name: 'Éponges', quantity: 2, unit: 'boîte' })
         .expect(201);
 
       const list = await request(app.getHttpServer())
