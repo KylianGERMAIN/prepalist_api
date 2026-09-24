@@ -4,8 +4,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * Ferme le jeu d'unités des recettes. `Unité`, `u` et `pièce` coexistaient pour
  * la même chose et produisaient deux lignes de courses par ingrédient.
  *
- * `shopping_list_items.unit` reste en texte libre : un item ajouté à la main
- * porte l'unité que l'utilisateur a tapée, qu'aucun enum ne peut couvrir.
+ * `shopping_list_items.unit` reste en texte libre : les items ajoutés à la main
+ * avant le jeu fermé portent une unité tapée, qu'aucun enum ne peut couvrir.
  */
 export class CloseUnitSet1786500000000 implements MigrationInterface {
   name = 'CloseUnitSet1786500000000';

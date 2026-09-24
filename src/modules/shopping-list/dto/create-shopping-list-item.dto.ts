@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsEnum,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -7,6 +8,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { Unit } from '../../../common/unit';
 
 export class CreateShoppingListItemDto {
   @ApiProperty({ maxLength: 200 })
@@ -21,8 +23,7 @@ export class CreateShoppingListItemDto {
   @Min(0)
   quantity?: number;
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsString()
-  unit?: string;
+  @ApiProperty({ enum: Unit })
+  @IsEnum(Unit)
+  unit!: Unit;
 }
