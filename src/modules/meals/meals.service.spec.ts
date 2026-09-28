@@ -1,4 +1,5 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Unit } from '../../common/unit';
 import { MealsService } from './meals.service';
 
 describe('MealsService', () => {
@@ -57,8 +58,8 @@ describe('MealsService', () => {
     const meal = await service.create('u1', {
       name: 'Curry',
       ingredients: [
-        { ingredientId: 'i1', quantity: 1, unit: 'g' },
-        { ingredientId: 'i2', quantity: 2, unit: 'g' },
+        { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+        { ingredientId: 'i2', quantity: 2, unit: Unit.GRAM },
       ],
     });
     expect(meals.save).toHaveBeenCalled();
@@ -85,8 +86,8 @@ describe('MealsService', () => {
       service.create('u1', {
         name: 'Curry',
         ingredients: [
-          { ingredientId: 'i1', quantity: 1, unit: 'g' },
-          { ingredientId: 'i2', quantity: 2, unit: 'g' },
+          { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+          { ingredientId: 'i2', quantity: 2, unit: Unit.GRAM },
         ],
       }),
     ).rejects.toThrow(BadRequestException);
@@ -153,7 +154,7 @@ describe('MealsService', () => {
     ingredients.find.mockResolvedValue([{ id: 'i1' }]);
     await service.update('u1', 'm1', {
       name: 'new',
-      ingredients: [{ ingredientId: 'i1', quantity: 1, unit: 'g' }],
+      ingredients: [{ ingredientId: 'i1', quantity: 1, unit: Unit.GRAM }],
     });
     const saved = meals.save.mock.calls[0][0];
     expect(saved.name).toBe('new');
@@ -176,8 +177,8 @@ describe('MealsService', () => {
     await expect(
       service.update('u1', 'm1', {
         ingredients: [
-          { ingredientId: 'i1', quantity: 1, unit: 'g' },
-          { ingredientId: 'i1', quantity: 2, unit: 'g' },
+          { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+          { ingredientId: 'i1', quantity: 2, unit: Unit.GRAM },
         ],
       }),
     ).rejects.toThrow(BadRequestException);

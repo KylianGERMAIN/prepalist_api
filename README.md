@@ -44,7 +44,8 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs (ho
   `startDate` sur le jour de courses).
 - **Phase 3** — liste de courses : `GET /plan/shopping-list`, table matérialisée
   `shopping_list_items`, synchronisation explicite `POST /plan/shopping-list/sync`
-  insert-only, CRUD des items par `itemId`.
+  qui réécrit les items dérivés depuis les plats (coches et éditions perdues,
+  items manuels conservés), CRUD des items par `itemId`.
 
 Phase 4 (capture IA) écartée volontairement. Phase 5 (rappel hebdo par cron)
 retirée : la livraison n'était qu'un log, et « pas encore planifié » n'a plus de

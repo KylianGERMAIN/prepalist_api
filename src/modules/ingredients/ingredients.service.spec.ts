@@ -1,4 +1,5 @@
 import { ConflictException } from '@nestjs/common';
+import { Unit } from '../../common/unit';
 import { QueryFailedError } from 'typeorm';
 import { IngredientsService } from './ingredients.service';
 
@@ -51,7 +52,10 @@ describe('IngredientsService', () => {
 
   it('create trims and persists a new ingredient', async () => {
     mockExisting(null);
-    const ing = await service.create({ name: ' Tomate ', defaultUnit: 'g' });
+    const ing = await service.create({
+      name: ' Tomate ',
+      defaultUnit: Unit.GRAM,
+    });
     expect(repo.save).toHaveBeenCalled();
     expect(ing.name).toBe('Tomate');
   });

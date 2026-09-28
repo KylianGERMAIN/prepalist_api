@@ -1,13 +1,16 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { isEnum } from 'class-validator';
 import { Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { roundQuantity } from '../../common/quantity';
+import { Unit } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
@@ -43,22 +46,11 @@ export class ShoppingListService {
     // Repose sur l'UI, qui fait toujours un GET avant tout ajout manuel.
     const count = await this.items.count({ where: { planId: plan.id } });
     if (count === 0) {
-      try {
-        // Relu en profond ici seulement : la jointure des ingrédients se paie à
-        // l'init, pas à chaque lecture d'une liste déjà peuplée.
-        await this.syncDerived(
-          await this.plan.ensureForUserWithIngredients(userId),
-        );
-      } catch (err) {
-        // Deux GET concurrents sur un plan vide lancent deux sync ; l'index unique
-        // partiel fait échouer le second, dont le travail est déjà fait.
-        if (!isUniqueViolation(err)) {
-          throw err;
-        }
-        this.logger.warn(
-          `Init concurrente de la liste du plan ${plan.id} : conflit avalé`,
-        );
-      }
+      // Relu en profond ici seulement : la jointure des ingrédients se paie à
+      // l'init, pas à chaque lecture d'une liste déjà peuplée.
+      await this.syncDerived(
+        await this.plan.ensureForUserWithIngredients(userId),
+      );
     }
     return this.read(plan);
   }
@@ -79,7 +71,7 @@ export class ShoppingListService {
       source: ShoppingItemSource.MANUAL,
       ingredientId: null,
       name: dto.name,
-      unit: dto.unit ?? null,
+      unit: dto.unit,
       quantity: dto.quantity ?? null,
       checked: false,
     });
@@ -87,7 +79,6 @@ export class ShoppingListService {
     return new ShoppingListItemDto(saved);
   }
 
-  /** Un item DERIVED est éditable comme un MANUAL : la liste appartient à l'utilisateur. */
   async updateItem(
     userId: string,
     itemId: string,
@@ -105,21 +96,25 @@ export class ShoppingListService {
       item.quantity = dto.quantity;
     }
     if (dto.unit !== undefined) {
+      // Comparé à l'unité actuelle : un article antérieur au jeu fermé doit
+      // rester éditable tant qu'on ne touche pas à son unité.
+      if (dto.unit !== item.unit && !isEnum(dto.unit, Unit)) {
+        throw new BadRequestException(
+          `Unité invalide : ${Object.values(Unit).join(', ')}`,
+        );
+      }
       item.unit = dto.unit;
     }
 
     try {
-      const saved = await this.items.save(item);
-      return new ShoppingListItemDto(saved);
+      return new ShoppingListItemDto(await this.items.save(item));
     } catch (err) {
-      // Éditer un DERIVED peut amener sa clé (ingredientId, unit) sur celle d'un
-      // autre dérivé, et collisionner l'index unique partiel.
-      if (isUniqueViolation(err)) {
-        throw new ConflictException(
-          'Un item dérivé identique (ingrédient + unité) existe déjà',
-        );
+      if (!isUniqueViolation(err)) {
+        throw err;
       }
-      throw err;
+      throw new ConflictException(
+        `« ${item.name} » est déjà dans la liste avec l'unité ${item.unit}`,
+      );
     }
   }
 
@@ -155,42 +150,44 @@ export class ShoppingListService {
     );
   }
 
-  // Insert-only : jamais de mise à jour de quantité ni de suppression d'orphelin,
-  // sinon les éditions manuelles de l'utilisateur seraient écrasées.
+  // Réécrit les DERIVED : coches, éditions et suppressions d'un dérivé sont
+  // perdues, seuls les MANUAL survivent.
   // `plan` vient d'`ensureForUserWithIngredients` : sans les ingrédients chargés,
-  // l'agrégation rend une liste vide sans lever d'erreur.
+  // le sync vide les dérivés sans lever d'erreur.
   private async syncDerived(plan: Plan): Promise<void> {
     const derived = this.computeDerived(plan);
-    if (derived.length === 0) {
-      return;
-    }
-    await this.items.manager.transaction(async (manager) => {
-      const repo = manager.getRepository(ShoppingListItem);
-      const existing = await repo.find({ where: { planId: plan.id } });
-      const existingKeys = new Set(
-        existing.map((item) => this.keyOf(item.ingredientId, item.unit)),
-      );
-
-      const toInsert = derived
-        .filter(
-          (line) => !existingKeys.has(this.keyOf(line.ingredientId, line.unit)),
-        )
-        .map((line) =>
-          repo.create({
-            planId: plan.id,
-            source: ShoppingItemSource.DERIVED,
-            ingredientId: line.ingredientId,
-            name: line.name,
-            unit: line.unit,
-            quantity: line.quantity,
-            checked: false,
-          }),
+    try {
+      await this.items.manager.transaction(async (manager) => {
+        const repo = manager.getRepository(ShoppingListItem);
+        await repo.delete({
+          planId: plan.id,
+          source: ShoppingItemSource.DERIVED,
+        });
+        if (derived.length === 0) {
+          return;
+        }
+        await repo.save(
+          derived.map((line) =>
+            repo.create({
+              planId: plan.id,
+              source: ShoppingItemSource.DERIVED,
+              ingredientId: line.ingredientId,
+              name: line.name,
+              unit: line.unit,
+              quantity: line.quantity,
+              checked: false,
+            }),
+          ),
         );
-
-      if (toInsert.length > 0) {
-        await repo.save(toInsert);
+      });
+    } catch (err) {
+      // Deux sync concurrents (deux onglets, deux GET sur un plan vide) : l'index
+      // unique partiel fait échouer le second, dont le travail est déjà fait.
+      if (!isUniqueViolation(err)) {
+        throw err;
       }
-    });
+      this.logger.warn(`Sync concurrente du plan ${plan.id} : conflit avalé`);
+    }
   }
 
   private computeDerived(plan: Plan): DerivedLine[] {
