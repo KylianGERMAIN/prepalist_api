@@ -159,13 +159,15 @@ describe('Liste de courses (e2e)', () => {
     });
   });
 
-  it('rend une liste complète à des sync concurrents sur un plan vide', async () => {
+  it('rend une liste complète à des sync concurrents sur une liste vide', async () => {
     const results = await Promise.all(Array.from({ length: 5 }, sync));
 
+    const names = (res: request.Response) =>
+      res.body.items.map((i: { name: string }) => i.name);
     for (const res of results) {
-      expect(res.body.items).toHaveLength(2);
+      expect(names(res)).toEqual(['Basilic', 'Tomate']);
     }
-    expect((await getList()).body.items).toHaveLength(2);
+    expect(names(await getList())).toEqual(['Basilic', 'Tomate']);
   });
 
   it('ramène au sync un dérivé supprimé et garde les manuels', async () => {

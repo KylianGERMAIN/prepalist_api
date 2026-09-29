@@ -26,7 +26,7 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs (ho
 | `pnpm build` | compilation TS → `dist/` |
 | `pnpm lint` | ESLint + Prettier (fix) |
 | `pnpm test` | specs Jest, sans base |
-| `pnpm test:e2e` | tests d'intégration sur la base `prepalist_test`, créée et migrée automatiquement (Postgres doit tourner) |
+| `pnpm test:e2e` | tests d'intégration sur la base `prepalist_test`, créée et migrée automatiquement (Postgres doit tourner ; `DB_PORT=<port>` si 5432 est pris) |
 | `pnpm migration:generate src/migrations/<Nom>` | génère une migration depuis les entities |
 | `pnpm migration:run` / `pnpm migration:revert` | applique / annule |
 
