@@ -4,7 +4,7 @@
 // puis TRUNCATE la base de test sur ce cluster.
 process.env.NODE_ENV = 'test';
 process.env.DB_HOST = 'localhost';
-process.env.DB_PORT = '5432';
+process.env.DB_PORT ??= '5432';
 process.env.DB_NAME = 'prepalist_test';
 process.env.DB_SSL = 'false';
 process.env.JWT_ACCESS_SECRET ??= 'e2e-access-secret';

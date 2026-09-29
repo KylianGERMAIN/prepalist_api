@@ -159,6 +159,15 @@ describe('Liste de courses (e2e)', () => {
     });
   });
 
+  it('rend une liste complète à des sync concurrents sur un plan vide', async () => {
+    const results = await Promise.all(Array.from({ length: 5 }, sync));
+
+    for (const res of results) {
+      expect(res.body.items).toHaveLength(2);
+    }
+    expect((await getList()).body.items).toHaveLength(2);
+  });
+
   it('ramène au sync un dérivé supprimé et garde les manuels', async () => {
     const [basilic] = (await getList()).body.items;
     await request(app.getHttpServer())
