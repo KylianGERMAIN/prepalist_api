@@ -4,6 +4,8 @@ export class BackfillIngredientDefaultUnit1787000000000 implements MigrationInte
   name = 'BackfillIngredientDefaultUnit1787000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // `unit` est un enum : à égalité, `ORDER BY` suit l'ordre de déclaration du
+    // type (g, ml, pièce…), pas l'ordre alphabétique.
     await queryRunner.query(`
       UPDATE "ingredients" i
       SET "default_unit" = top."unit"
