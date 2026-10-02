@@ -37,8 +37,8 @@ export async function createTestApp({ throttle = false } = {}): Promise<{
 
   const app = moduleRef.createNestApplication();
   configureApp(app);
-  // Sans port écouté, supertest ouvre et ferme un serveur par requête, ce qui
-  // donnait des « socket hang up » et des réponses vides aléatoires.
+  // Sans port écouté, chaque requête supertest met ce serveur en écoute puis le
+  // ferme : la première à finir coupe les requêtes concurrentes.
   await app.listen(0);
 
   return { app, db: app.get(DataSource) };
