@@ -17,7 +17,7 @@ export class RemoveShoppingListItemsDto {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(200)
-  @IsUUID('4', { each: true })
+  @IsUUID('all', { each: true })
   itemIds!: string[];
 }
 

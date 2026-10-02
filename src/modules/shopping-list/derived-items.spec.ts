@@ -122,6 +122,22 @@ describe('diffDerived', () => {
     expect(dismissed.dismissed).toBe(false);
   });
 
+  it('brings back a bought-then-removed item whose quantity grows', () => {
+    const bought = item('i1', 'g', 250, { checked: true, dismissed: true });
+    diffDerived([bought], [line('i1', 'g', 500)]);
+    expect(bought).toMatchObject({
+      quantity: 500,
+      checked: false,
+      dismissed: false,
+    });
+  });
+
+  it('keeps an unchecked removed item hidden when its quantity grows', () => {
+    const unwanted = item('i1', 'g', 250, { dismissed: true });
+    diffDerived([unwanted], [line('i1', 'g', 500)]);
+    expect(unwanted).toMatchObject({ quantity: 500, dismissed: true });
+  });
+
   it('deletes a dismissed item whose key left the plan', () => {
     const dismissed = item('i1', 'g', 250, { dismissed: true });
     expect(diffDerived([dismissed], []).toDelete).toEqual([dismissed]);

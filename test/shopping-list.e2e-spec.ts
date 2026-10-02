@@ -386,6 +386,7 @@ describe('Liste de courses (e2e)', () => {
       .expect(204);
     expect((await getList()).body.items).toEqual([]);
   });
+
   const addManual = (name: string) =>
     request(app.getHttpServer())
       .post('/plan/shopping-list/items')
@@ -430,6 +431,46 @@ describe('Liste de courses (e2e)', () => {
 
     expect(res.body.items).toEqual([]);
     expect((await getList()).body.items).toHaveLength(2);
+  });
+
+  it('retire mes ids et ignore ceux d’un autre compte dans une même requête', async () => {
+    const other = await registerUser(app);
+    const foreign = (
+      await request(app.getHttpServer())
+        .post('/plan/shopping-list/items')
+        .set(...bearer(other))
+        .send({ name: 'Lessive', quantity: 1, unit: 'pièce' })
+        .expect(201)
+    ).body;
+    const [basilic] = (await getList()).body.items;
+
+    await removeMany(user, [basilic.id, foreign.id]).expect(200);
+
+    expect(
+      (await getList()).body.items.map((i: { name: string }) => i.name),
+    ).toEqual(['Tomate']);
+    const theirs = await request(app.getHttpServer())
+      .get('/plan/shopping-list')
+      .set(...bearer(other))
+      .expect(200);
+    expect(theirs.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Lessive',
+    ]);
+  });
+
+  it('ramène un article acheté puis retiré quand le plan en demande plus', async () => {
+    const [basilic] = (await getList()).body.items;
+    await patchItem(basilic.id, { checked: true }).expect(200);
+    await clear('checked').expect(200);
+
+    await assign(0, { servings: 2 });
+
+    const [back] = (await getList()).body.items;
+    expect(back).toMatchObject({
+      name: 'Basilic',
+      quantity: 500,
+      checked: false,
+    });
   });
 
   it('valide le corps de la suppression multiple', async () => {

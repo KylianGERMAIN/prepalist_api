@@ -3,9 +3,8 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import { QueryFailedError } from 'typeorm';
+import { In, QueryFailedError } from 'typeorm';
 import { Unit } from '../../common/unit';
-import { In } from 'typeorm';
 import { lockPlan, reconcileDerived } from './derived-items';
 import { ClearScope } from './dto/remove-shopping-list-items.dto';
 import { ShoppingListService } from './shopping-list.service';

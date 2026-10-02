@@ -68,8 +68,9 @@ export class ShoppingListController {
   @Post('items/delete')
   @HttpCode(200)
   @ApiOperation({
-    summary:
-      'Supprime plusieurs items (POST : un body de DELETE est ignoré par certains proxies)',
+    summary: 'Supprime plusieurs items de la liste',
+    description:
+      'POST et non DELETE : certains proxies ignorent le body d’un DELETE.',
   })
   @ApiOkResponse({ type: ShoppingListDto })
   removeItems(
