@@ -61,6 +61,11 @@ export class MealsService {
     if (query.tag) {
       qb.andWhere(':tag = ANY(meal.tags)', { tag: query.tag });
     }
+    if (query.incomplete) {
+      qb.andWhere(
+        'NOT EXISTS (SELECT 1 FROM meal_ingredients mi WHERE mi.meal_id = meal.id)',
+      );
+    }
 
     const [items, total] = await qb
       .orderBy('meal.created_at', 'DESC')

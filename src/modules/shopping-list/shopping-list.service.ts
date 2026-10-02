@@ -10,6 +10,7 @@ import { EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Unit } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
+import { MealView } from '../meals/meal-state.service';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
 import { ClearScope } from './dto/remove-shopping-list-items.dto';
@@ -208,6 +209,19 @@ export class ShoppingListService {
       plan.startDate,
       items.map((item) => new ShoppingListItemDto(item)),
       dismissedCount,
+      this.incompleteMeals(plan),
     );
+  }
+
+  // `plan` vient d'`ensureForUser`, dont les repas portent `ingredientCount`.
+  private incompleteMeals(plan: Plan): { id: string; name: string }[] {
+    const byId = new Map<string, string>();
+    for (const slot of plan.slots) {
+      const meal = slot.meal as MealView | null | undefined;
+      if (meal && meal.ingredientCount === 0) {
+        byId.set(meal.id, meal.name);
+      }
+    }
+    return [...byId].map(([id, name]) => ({ id, name }));
   }
 }

@@ -1,8 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/paginated.dto';
 
 export class MealQueryDto extends PaginationQueryDto {
+  @ApiProperty({ required: false, description: 'true = repas sans ingrédient' })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  incomplete?: boolean;
+
   @ApiProperty({ required: false, description: 'Filtre par tag exact' })
   @IsOptional()
   @IsString()
