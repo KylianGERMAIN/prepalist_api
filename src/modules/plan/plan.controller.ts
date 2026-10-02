@@ -16,6 +16,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { MoveSlotDto } from './dto/move-slot.dto';
 import { PlanDto } from './dto/plan.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { PlanService } from './plan.service';
@@ -52,6 +53,21 @@ export class PlanController {
     @Body() dto: UpdateSlotDto,
   ) {
     return this.plan.updateSlot(userId, slotId, dto);
+  }
+
+  @Post('slots/:slotId/move')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Déplace le contenu d’un créneau vers un autre, en l’échangeant si la cible est occupée',
+  })
+  @ApiOkResponse({ type: PlanDto })
+  moveSlot(
+    @CurrentUser('id') userId: string,
+    @Param('slotId', ParseUUIDPipe) slotId: string,
+    @Body() dto: MoveSlotDto,
+  ) {
+    return this.plan.moveSlot(userId, slotId, dto.targetSlotId);
   }
 
   @Delete('slots')

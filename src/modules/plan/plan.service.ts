@@ -255,6 +255,43 @@ export class PlanService {
     return this.ensureForUser(userId);
   }
 
+  /** Échange repas, portions et état « dehors » des deux créneaux ; cible vide = déplacement. */
+  async moveSlot(
+    userId: string,
+    slotId: string,
+    targetSlotId: string,
+  ): Promise<PlanView> {
+    const plan = await this.ensureForUser(userId);
+    const ids = new Set(plan.slots.map((s) => s.id));
+    if (!ids.has(slotId) || !ids.has(targetSlotId)) {
+      throw new NotFoundException('Créneau introuvable');
+    }
+    if (slotId === targetSlotId) {
+      return plan;
+    }
+
+    await this.plans.manager.transaction(async (manager) => {
+      // Le verrou du plan sérialise déjà toute écriture sur ses créneaux : deux
+      // échanges croisés s'exécutent l'un après l'autre, sans deadlock.
+      await lockPlan(manager, plan.id);
+      const [source, target] = await Promise.all(
+        [slotId, targetSlotId].map((id) =>
+          manager.findOneByOrFail(PlanSlot, { id }),
+        ),
+      );
+      const contentOf = ({ mealId, servings, away }: PlanSlot) => ({
+        mealId,
+        servings,
+        away,
+      });
+      await manager.update(PlanSlot, source.id, contentOf(target));
+      await manager.update(PlanSlot, target.id, contentOf(source));
+      // Pas de réconciliation : les mêmes repas avec les mêmes portions, la liste
+      // de courses ne change pas.
+    });
+    return this.ensureForUser(userId);
+  }
+
   /**
    * Vide les créneaux et les items DERIVED ; les MANUAL survivent.
    * Seul geste qui déplace `startDate` — aucun autre appel ne réancre le plan.
