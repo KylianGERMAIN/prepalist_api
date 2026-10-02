@@ -9,14 +9,19 @@ export class NormalizeMealTags1787900000000 implements MigrationInterface {
   name = 'NormalizeMealTags1787900000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
+    // `\s` Postgres ignore les espaces insécables (U+00A0, U+202F) que `\s` JS
+    // retire : ils sont ajoutés à la classe pour que les deux normalisations
+    // coïncident.
     await queryRunner.query(`
       UPDATE "meals" m SET "tags" = COALESCE((
-        SELECT array_agg(tag ORDER BY first_seen)
+        SELECT array_agg(tag ORDER BY first_seen) FILTER (WHERE tag <> '')
         FROM (
-          SELECT lower(btrim(regexp_replace(normalize(t, NFC), '\\s+', ' ', 'g'))) AS tag,
+          SELECT lower(btrim(regexp_replace(
+                   normalize(t, NFC),
+                   '[[:space:]' || chr(160) || chr(8239) || ']+', ' ', 'g'
+                 ))) AS tag,
                  min(ord) AS first_seen
           FROM unnest(m."tags") WITH ORDINALITY AS u(t, ord)
-          WHERE btrim(t) <> ''
           GROUP BY 1
         ) normalized
       ), '{}')

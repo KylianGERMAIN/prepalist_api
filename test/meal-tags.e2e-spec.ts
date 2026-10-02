@@ -46,6 +46,16 @@ describe('Tags des repas (e2e)', () => {
     expect(res.body.tags).toEqual(['hiver', 'plat du jour']);
   });
 
+  it('normalise aussi au PATCH', async () => {
+    const { body } = await create('Raclette', ['hiver']).expect(201);
+    const res = await request(app.getHttpServer())
+      .patch(`/meals/${body.id}`)
+      .set(...bearer(admin))
+      .send({ tags: [' Hiver ', 'HIVER', 'Fromage'] })
+      .expect(200);
+    expect(res.body.tags).toEqual(['hiver', 'fromage']);
+  });
+
   it('liste les tags existants, les plus fréquents en tête', async () => {
     await create('Raclette', ['hiver', 'fromage']).expect(201);
     await create('Tartiflette', ['Hiver']).expect(201);
@@ -81,7 +91,16 @@ describe('Tags des repas (e2e)', () => {
   it('normalise les données existantes, et rejouer la migration ne change rien', async () => {
     const { body } = await create('Raclette', ['x']).expect(201);
     await db.query(`UPDATE meals SET tags = $1 WHERE id = $2`, [
-      [' Hiver', 'hiver ', '', 'Plat  du jour', 'HIVER'],
+      [
+        ' Hiver',
+        'hiver ',
+        '',
+        '\t',
+        'Plat\u00a0 du jour',
+        'HIVER',
+        'ÉTÉ',
+        'été',
+      ],
       body.id,
     ]);
     const migration = new NormalizeMealTags1787900000000();
@@ -97,7 +116,7 @@ describe('Tags des repas (e2e)', () => {
     ]);
     await runner.release();
 
-    expect(once[0].tags).toEqual(['hiver', 'plat du jour']);
+    expect(once[0].tags).toEqual(['hiver', 'plat du jour', 'été']);
     expect(twice[0].tags).toEqual(once[0].tags);
   });
 });
