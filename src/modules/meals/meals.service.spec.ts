@@ -1,6 +1,12 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Unit } from '../../common/unit';
+import { reconcilePlans } from '../shopping-list/derived-items';
 import { MealsService } from './meals.service';
+
+jest.mock('../shopping-list/derived-items', () => ({
+  planIdsUsingMeal: jest.fn().mockResolvedValue(['p1']),
+  reconcilePlans: jest.fn(),
+}));
 
 describe('MealsService', () => {
   let service: MealsService;
@@ -11,6 +17,7 @@ describe('MealsService', () => {
     remove: jest.Mock;
     update: jest.Mock;
     createQueryBuilder: jest.Mock;
+    manager: { transaction: jest.Mock };
   };
   let mealIngredients: { create: jest.Mock };
   let ingredients: { find: jest.Mock; update: jest.Mock };
@@ -28,7 +35,16 @@ describe('MealsService', () => {
       remove: jest.fn(() => Promise.resolve()),
       update: jest.fn(() => Promise.resolve()),
       createQueryBuilder: jest.fn(),
+      manager: {
+        transaction: jest.fn(async (cb: (m: unknown) => unknown) =>
+          cb({
+            save: (x: object) => meals.save(x),
+            remove: (x: object) => meals.remove(x),
+          }),
+        ),
+      },
     };
+    jest.mocked(reconcilePlans).mockClear();
     mealIngredients = { create: jest.fn((x: unknown) => x) };
     ingredients = { find: jest.fn(), update: jest.fn() };
     state = {
@@ -143,6 +159,7 @@ describe('MealsService', () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
     await service.remove('m1');
     expect(meals.remove).toHaveBeenCalled();
+    expect(reconcilePlans).toHaveBeenCalledWith(expect.anything(), ['p1']);
   });
 
   it('update replaces ingredients when the list is provided', async () => {
@@ -159,6 +176,7 @@ describe('MealsService', () => {
     const saved = meals.save.mock.calls[0][0];
     expect(saved.name).toBe('new');
     expect(saved.ingredients).toHaveLength(1);
+    expect(reconcilePlans).toHaveBeenCalledWith(expect.anything(), ['p1']);
   });
 
   it('update leaves ingredients untouched when omitted', async () => {
@@ -170,6 +188,7 @@ describe('MealsService', () => {
     const saved = meals.save.mock.calls[0][0];
     expect(saved.ingredients).toEqual([{ id: 'old' }]);
     expect(saved.name).toBe('new');
+    expect(reconcilePlans).not.toHaveBeenCalled();
   });
 
   it('update rejects a duplicated ingredient', async () => {

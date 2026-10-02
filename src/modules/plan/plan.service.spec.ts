@@ -4,6 +4,12 @@ import { PlanService } from './plan.service';
 import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
 import { Plan } from './entities/plan.entity';
 import { ShoppingListItem } from '../shopping-list/entities/shopping-list-item.entity';
+import { reconcileDerived } from '../shopping-list/derived-items';
+
+jest.mock('../shopping-list/derived-items', () => ({
+  lockPlan: jest.fn(),
+  reconcileDerived: jest.fn(),
+}));
 
 const meal = (
   id: string,
@@ -47,11 +53,12 @@ describe('PlanService', () => {
   let meals: { find: jest.Mock; findOne: jest.Mock };
   let users: { findById: jest.Mock };
   let state: { attachFor: jest.Mock };
-  let manager: { update: jest.Mock; delete: jest.Mock };
+  let manager: { update: jest.Mock; delete: jest.Mock; save: jest.Mock };
   let transaction: jest.Mock;
 
   beforeEach(() => {
-    manager = { update: jest.fn(), delete: jest.fn() };
+    manager = { update: jest.fn(), delete: jest.fn(), save: jest.fn() };
+    jest.mocked(reconcileDerived).mockClear();
     transaction = jest.fn(
       async (cb: (m: unknown) => unknown) => cb(manager) as unknown,
     );
@@ -166,7 +173,7 @@ describe('PlanService', () => {
 
       await service.generate('u1');
 
-      const saved = slots.save.mock.calls[0][0] as { id: string }[];
+      const saved = manager.save.mock.calls[0][1] as { id: string }[];
       expect(saved.map((s) => s.id)).toEqual(['s2']);
       expect(assigned.mealId).toBe('m-fixed');
     });
@@ -177,8 +184,18 @@ describe('PlanService', () => {
 
       await service.generate('u1');
 
-      const saved = slots.save.mock.calls[0][0] as Record<string, unknown>[];
+      const saved = manager.save.mock.calls[0][1] as Record<string, unknown>[];
       expect(Object.keys(saved[0]).sort()).toEqual(['id', 'mealId']);
+    });
+
+    it('recalcule la liste dans la transaction qui écrit les créneaux', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      meals.find.mockResolvedValue([meal('m1')]);
+
+      await service.generate('u1');
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(reconcileDerived).toHaveBeenCalledWith(manager, 'p1');
     });
 
     it('trie les créneaux avant de générer, quel que soit l’ordre rendu par la base', async () => {
@@ -247,7 +264,22 @@ describe('PlanService', () => {
       );
       await service.updateSlot('u1', 's1', { mealId: null });
       expect(meals.findOne).not.toHaveBeenCalled();
-      expect(slots.update).toHaveBeenCalledWith('s1', { mealId: null });
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's1', {
+        mealId: null,
+      });
+    });
+
+    it('recalcule la liste dans la même transaction que l’écriture', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      await service.updateSlot('u1', 's1', { servings: 3 });
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(reconcileDerived).toHaveBeenCalledWith(manager, 'p1');
+    });
+
+    it('n’écrit rien pour un patch vide', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      await service.updateSlot('u1', 's1', {});
+      expect(transaction).not.toHaveBeenCalled();
     });
   });
 

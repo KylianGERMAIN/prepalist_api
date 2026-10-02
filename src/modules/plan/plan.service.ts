@@ -9,6 +9,7 @@ import { DeepPartial, FindOptionsRelations, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
 import { MealStateService, MealView } from '../meals/meal-state.service';
+import { lockPlan, reconcileDerived } from '../shopping-list/derived-items';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -24,9 +25,6 @@ const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
 const SLOT_RELATIONS = { slots: { meal: true } } as const;
-const INGREDIENT_RELATIONS = {
-  slots: { meal: { ingredients: { ingredient: true } } },
-} as const;
 
 @Injectable()
 export class PlanService {
@@ -65,11 +63,6 @@ export class PlanService {
     );
     filled.forEach((slot, index) => (slot.meal = attached[index]));
     return plan;
-  }
-
-  /** Même plan, avec de quoi agréger la liste de courses. */
-  async ensureForUserWithIngredients(userId: string): Promise<Plan> {
-    return this.ensure(userId, INGREDIENT_RELATIONS);
   }
 
   private async ensure(
@@ -157,12 +150,17 @@ export class PlanService {
     // La seule colonne FK, sans la relation `meal` : chargée, elle écraserait au
     // save le mealId qu'on vient de poser.
     if (changed.length > 0) {
-      await this.slots.save(
-        changed.map((s) => ({
-          id: s.id,
-          mealId: s.mealId,
-        })) as DeepPartial<PlanSlot>[],
-      );
+      await this.plans.manager.transaction(async (manager) => {
+        await lockPlan(manager, plan.id);
+        await manager.save(
+          PlanSlot,
+          changed.map((s) => ({
+            id: s.id,
+            mealId: s.mealId,
+          })) as DeepPartial<PlanSlot>[],
+        );
+        await reconcileDerived(manager, plan.id);
+      });
     }
     return this.ensureForUser(userId);
   }
@@ -191,9 +189,16 @@ export class PlanService {
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;
     }
+    if (Object.keys(patch).length === 0) {
+      return plan;
+    }
 
-    // update() écrit les colonnes directement (évite le conflit FK/relation).
-    await this.slots.update(slotId, patch);
+    await this.plans.manager.transaction(async (manager) => {
+      await lockPlan(manager, plan.id);
+      // update() écrit les colonnes directement (évite le conflit FK/relation).
+      await manager.update(PlanSlot, slotId, patch);
+      await reconcileDerived(manager, plan.id);
+    });
     return this.ensureForUser(userId);
   }
 
@@ -206,9 +211,9 @@ export class PlanService {
     const startDate = await this.anchorFor(userId);
 
     // Atomique : des créneaux vidés avec des dérivés survivants afficheraient les
-    // ingrédients d'un plan disparu, et l'init paresseuse exige une liste vide pour
-    // rattraper.
+    // ingrédients d'un plan disparu.
     await this.plans.manager.transaction(async (manager) => {
+      await lockPlan(manager, plan.id);
       await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
       await manager.delete(ShoppingListItem, {
         planId: plan.id,
