@@ -47,9 +47,21 @@ export class ShoppingListDto {
   @ApiProperty({ type: [ShoppingListItemDto] })
   items: ShoppingListItemDto[];
 
-  constructor(planId: string, startDate: string, items: ShoppingListItemDto[]) {
+  @ApiProperty({
+    description:
+      'Articles issus des plats supprimés à la main, que la synchro ramènerait',
+  })
+  dismissedCount: number;
+
+  constructor(
+    planId: string,
+    startDate: string,
+    items: ShoppingListItemDto[],
+    dismissedCount: number,
+  ) {
     this.planId = planId;
     this.startDate = startDate;
     this.items = items;
+    this.dismissedCount = dismissedCount;
   }
 }

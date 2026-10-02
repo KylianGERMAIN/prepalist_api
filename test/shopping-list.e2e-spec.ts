@@ -14,6 +14,9 @@ describe('Liste de courses (e2e)', () => {
   let app: INestApplication;
   let db: DataSource;
   let user: TestUser;
+  let admin: TestUser;
+  let ingredientIds: string[];
+  let planSlots: { id: string }[];
 
   beforeAll(async () => {
     ({ app, db } = await createTestApp());
@@ -26,7 +29,7 @@ describe('Liste de courses (e2e)', () => {
   beforeEach(async () => {
     await truncateAll(db);
     user = await registerUser(app);
-    const admin = await registerAdmin(app, db);
+    admin = await registerAdmin(app, db);
 
     const ids: string[] = [];
     for (const name of ['Tomate', 'Basilic']) {
@@ -37,6 +40,7 @@ describe('Liste de courses (e2e)', () => {
         .expect(201);
       ids.push(res.body.id as string);
     }
+    ingredientIds = ids;
     const meal = await request(app.getHttpServer())
       .post('/meals')
       .set(...bearer(admin))
@@ -53,6 +57,7 @@ describe('Liste de courses (e2e)', () => {
       .get('/plan')
       .set(...bearer(user))
       .expect(200);
+    planSlots = plan.body.slots as { id: string }[];
     await request(app.getHttpServer())
       .patch(`/plan/slots/${plan.body.slots[0].id}`)
       .set(...bearer(user))
@@ -66,7 +71,7 @@ describe('Liste de courses (e2e)', () => {
       .set(...bearer(user))
       .expect(200);
 
-  it('peuple la liste au premier accès depuis les repas du plan', async () => {
+  it('peuple la liste dès l’assignation d’un créneau', async () => {
     const list = await getList();
 
     expect(list.body.items).toHaveLength(2);
@@ -76,9 +81,7 @@ describe('Liste de courses (e2e)', () => {
     ]);
   });
 
-  // Le garde `count === 0` de forPlan : sans lui, chaque GET resynchroniserait et
-  // ramènerait l'item supprimé.
-  it('ne ressuscite pas un item dérivé supprimé', async () => {
+  it('ne ressuscite pas un item dérivé supprimé au GET suivant', async () => {
     const list = await getList();
 
     await request(app.getHttpServer())
@@ -90,10 +93,7 @@ describe('Liste de courses (e2e)', () => {
     expect(after.body.items).toHaveLength(1);
   });
 
-  // Comportement assumé et non couvert jusqu'ici : le garde compte TOUS les items,
-  // donc une liste vidée jusqu'au dernier item est indistinguable d'une liste
-  // jamais initialisée, et le GET suivant la repeuple.
-  it('repeuple une liste vidée jusqu’au dernier item', async () => {
+  it('laisse vide une liste vidée jusqu’au dernier item', async () => {
     const list = await getList();
     for (const item of list.body.items as { id: string }[]) {
       await request(app.getHttpServer())
@@ -103,11 +103,11 @@ describe('Liste de courses (e2e)', () => {
     }
 
     const after = await getList();
-    expect(after.body.items).toHaveLength(2);
+    expect(after.body.items).toHaveLength(0);
+    expect(after.body.dismissedCount).toBe(2);
   });
 
-  // Même garde, versant édition : un sync au GET écraserait la quantité saisie.
-  it('conserve une quantité éditée à la main', async () => {
+  it('conserve au GET une quantité éditée à la main', async () => {
     const list = await getList();
 
     await request(app.getHttpServer())
@@ -140,7 +140,7 @@ describe('Liste de courses (e2e)', () => {
     await patchItem(tomate.id, { unit: null }).expect(400);
   });
 
-  it('réécrit les dérivés au sync avec l’unité de la recette, sans doublon', async () => {
+  it('ramène au sync l’unité de la recette sur un dérivé édité, sans doublon', async () => {
     const [, tomate] = (await getList()).body.items;
     await patchItem(tomate.id, {
       unit: 'pièce',
@@ -205,5 +205,113 @@ describe('Liste de courses (e2e)', () => {
     await patchItem(created.body.id as string, { unit: 'lot' }).expect(400);
     await patchItem(created.body.id as string, { unit: null }).expect(400);
     await patchItem(created.body.id as string, { unit: 'boîte' }).expect(200);
+  });
+  const assign = (slotIndex: number, body: object) =>
+    request(app.getHttpServer())
+      .patch(`/plan/slots/${planSlots[slotIndex].id}`)
+      .set(...bearer(user))
+      .send(body)
+      .expect(200);
+
+  const createMeal = async (name: string, ingredientId: string) => {
+    const res = await request(app.getHttpServer())
+      .post('/meals')
+      .set(...bearer(admin))
+      .send({
+        name,
+        ingredients: [{ ingredientId, quantity: 100, unit: 'g' }],
+      })
+      .expect(201);
+    return res.body.id as string;
+  };
+
+  it('garde les coches quand le plan change ailleurs', async () => {
+    const [basilic, tomate] = (await getList()).body.items;
+    await patchItem(basilic.id, { checked: true }).expect(200);
+    await patchItem(tomate.id, { checked: true }).expect(200);
+    const res = await request(app.getHttpServer())
+      .post('/ingredients')
+      .set(...bearer(admin))
+      .send({ name: 'Riz' })
+      .expect(201);
+
+    await assign(1, { mealId: await createMeal('Riz nature', res.body.id) });
+
+    const after = (await getList()).body.items as {
+      name: string;
+      checked: boolean;
+    }[];
+    expect(after.map((i) => [i.name, i.checked])).toEqual([
+      ['Basilic', true],
+      ['Riz', false],
+      ['Tomate', true],
+    ]);
+  });
+
+  it('décoche un article dont la quantité augmente', async () => {
+    const [basilic] = (await getList()).body.items;
+    await patchItem(basilic.id, { checked: true }).expect(200);
+
+    await assign(0, { servings: 2 });
+
+    const [after] = (await getList()).body.items;
+    expect(after).toMatchObject({
+      name: 'Basilic',
+      quantity: 500,
+      checked: false,
+    });
+  });
+
+  it('retire les articles d’un créneau vidé', async () => {
+    await assign(0, { mealId: null });
+    expect((await getList()).body.items).toEqual([]);
+  });
+
+  it('ne ramène un dérivé supprimé qu’au sync explicite, coches intactes', async () => {
+    const [basilic, tomate] = (await getList()).body.items;
+    await request(app.getHttpServer())
+      .delete(`/plan/shopping-list/items/${basilic.id}`)
+      .set(...bearer(user))
+      .expect(204);
+    await patchItem(tomate.id, { checked: true }).expect(200);
+
+    await assign(0, { servings: 1 });
+    const meanwhile = await getList();
+    expect(meanwhile.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Tomate',
+    ]);
+
+    const res = await sync();
+    expect(res.body.dismissedCount).toBe(0);
+    expect(
+      res.body.items.map((i: { name: string; checked: boolean }) => [
+        i.name,
+        i.checked,
+      ]),
+    ).toEqual([
+      ['Basilic', false],
+      ['Tomate', true],
+    ]);
+  });
+
+  it('reste cohérente sous des assignations concurrentes', async () => {
+    const mealIds = await Promise.all(
+      ingredientIds.map((id, i) => createMeal(`Plat ${i}`, id)),
+    );
+
+    await Promise.all([
+      assign(1, { mealId: mealIds[0] }),
+      assign(2, { mealId: mealIds[1] }),
+      assign(3, { mealId: mealIds[0] }),
+    ]);
+
+    const items = (await getList()).body.items as {
+      name: string;
+      quantity: number;
+    }[];
+    expect(items.map((i) => [i.name, i.quantity])).toEqual([
+      ['Basilic', 350],
+      ['Tomate', 450],
+    ]);
   });
 });

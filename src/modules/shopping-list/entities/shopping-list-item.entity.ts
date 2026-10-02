@@ -17,7 +17,7 @@ export enum ShoppingItemSource {
   MANUAL = 'MANUAL',
 }
 
-// `sync` recalcule les items DERIVED depuis les plats et ne touche jamais aux MANUAL.
+// Les DERIVED sont recalculés depuis les plats à chaque écriture sur le plan ; les MANUAL jamais.
 @Entity('shopping_list_items')
 @Index('UQ_shopping_items_derived', ['planId', 'ingredientId', 'unit'], {
   unique: true,
@@ -73,6 +73,10 @@ export class ShoppingListItem {
   @ApiProperty()
   @Column({ type: 'boolean', default: false })
   checked!: boolean;
+
+  /** Dérivé supprimé à la main : masqué, et conservé pour que le recalcul ne le ressuscite pas. */
+  @Column({ type: 'boolean', default: false })
+  dismissed!: boolean;
 
   @ApiProperty()
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

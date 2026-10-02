@@ -5,27 +5,21 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { Unit } from '../../common/unit';
+import { lockPlan, reconcileDerived } from './derived-items';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
-const mi = (
-  ingredientId: string,
-  name: string,
-  unit: string,
-  quantity: number,
-) => ({
-  ingredientId,
-  unit,
-  quantity,
-  ingredient: { name },
-});
+jest.mock('./derived-items', () => ({
+  lockPlan: jest.fn(),
+  reconcileDerived: jest.fn(),
+}));
 
-const plan = (slots: unknown[]) => ({
+const plan = () => ({
   id: 'p1',
   userId: 'u1',
   startDate: '2024-07-01',
   dayCount: 7,
-  slots,
+  slots: [],
 });
 
 const derivedItem = (
@@ -48,120 +42,61 @@ const derivedItem = (
 
 describe('ShoppingListService', () => {
   let service: ShoppingListService;
-  let planService: {
-    ensureForUser: jest.Mock;
-    ensureForUserWithIngredients: jest.Mock;
-  };
-  let txRepo: {
-    create: jest.Mock;
-    save: jest.Mock;
-    delete: jest.Mock;
-  };
+  let planService: { ensureForUser: jest.Mock };
+  let manager: object;
   let items: {
     count: jest.Mock;
     find: jest.Mock;
     findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    update: jest.Mock;
     remove: jest.Mock;
     manager: { transaction: jest.Mock };
   };
 
   beforeEach(() => {
-    planService = {
-      ensureForUser: jest.fn(),
-      ensureForUserWithIngredients: jest.fn(),
-    };
-    // Même plan aux deux profondeurs par défaut ; le test « agrège depuis la
-    // lecture profonde » les dissocie, c'est lui qui verrouille le chargement.
-    planService.ensureForUserWithIngredients.mockImplementation(() =>
-      planService.ensureForUser(),
-    );
-    txRepo = {
-      create: jest.fn((x: unknown) => ({ ...(x as object) })),
-      save: jest.fn((x: unknown) => x),
-      delete: jest.fn(),
-    };
+    jest.mocked(lockPlan).mockClear();
+    jest.mocked(reconcileDerived).mockReset();
+    planService = { ensureForUser: jest.fn().mockResolvedValue(plan()) };
+    manager = {};
     items = {
-      count: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn(),
       create: jest.fn((x: unknown) => ({ ...(x as object) })),
       save: jest.fn((x: unknown) => x),
+      update: jest.fn(),
       remove: jest.fn(),
       manager: {
         transaction: jest.fn(
-          async (cb: (m: unknown) => unknown) =>
-            cb({ getRepository: () => txRepo }) as unknown,
+          async (cb: (m: unknown) => unknown) => cb(manager) as unknown,
         ),
       },
     };
     service = new ShoppingListService(items as never, planService as never);
   });
 
-  describe('forPlan (lazy init)', () => {
-    it('syncs when the list is entirely empty, then reads', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      items.count.mockResolvedValue(0);
-      await service.forPlan('u1');
-      expect(items.count).toHaveBeenCalledWith({ where: { planId: 'p1' } });
-      expect(items.manager.transaction).toHaveBeenCalledTimes(1);
-      expect(txRepo.create).toHaveBeenCalled();
-      expect(items.find).toHaveBeenCalled();
-    });
-
-    // Sans cette dissociation, revenir au plan peu profond garderait la suite
-    // verte pendant que la liste sortirait vide en prod (`ingredients ?? []`).
-    it('aggregates from the deep read, not from the plan without ingredients', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([{ servings: 1, meal: {} }]),
-      );
-      planService.ensureForUserWithIngredients.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      items.count.mockResolvedValue(0);
-
-      await service.forPlan('u1');
-
-      expect(txRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ ingredientId: 'i1', quantity: 250 }),
-      );
-    });
-
-    it('does not sync when the list already holds items (e.g. a manual one)', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      items.count.mockResolvedValue(1);
+  describe('forPlan', () => {
+    it('reads without writing, even on an empty list', async () => {
       await service.forPlan('u1');
       expect(items.manager.transaction).not.toHaveBeenCalled();
+      expect(reconcileDerived).not.toHaveBeenCalled();
     });
 
-    it('propagates a failure raised while resolving the plan', async () => {
-      planService.ensureForUser.mockRejectedValue(new Error('db down'));
-      await expect(service.forPlan('u1')).rejects.toThrow('db down');
+    it('hides dismissed items and reports how many there are', async () => {
+      items.count.mockResolvedValue(3);
+      const res = await service.forPlan('u1');
+      expect(items.find).toHaveBeenCalledWith({
+        where: { planId: 'p1', dismissed: false },
+      });
+      expect(items.count).toHaveBeenCalledWith({
+        where: { planId: 'p1', dismissed: true },
+      });
+      expect(res.dismissedCount).toBe(3);
     });
 
     it('returns items sorted by name', async () => {
-      planService.ensureForUser.mockResolvedValue(plan([]));
-      items.count.mockResolvedValue(2);
       items.find.mockResolvedValue([
         derivedItem('b', 'i2', 'g', 'Tomate', 250),
         derivedItem('a', 'i1', 'g', 'Pates', 240),
@@ -169,99 +104,36 @@ describe('ShoppingListService', () => {
       const res = await service.forPlan('u1');
       expect(res.items.map((i) => i.name)).toEqual(['Pates', 'Tomate']);
     });
+
+    it('propagates a failure raised while resolving the plan', async () => {
+      planService.ensureForUser.mockRejectedValue(new Error('db down'));
+      await expect(service.forPlan('u1')).rejects.toThrow('db down');
+    });
   });
 
-  describe('sync (rewrite)', () => {
-    const tomatoPlan = () =>
-      plan([
-        {
-          servings: 1,
-          meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-        },
-      ]);
-
-    it('deletes only the DERIVED items of the plan, never the MANUAL ones', async () => {
-      planService.ensureForUser.mockResolvedValue(tomatoPlan());
-
+  describe('sync', () => {
+    it('reconciles under the plan lock and restores dismissed items', async () => {
       await service.sync('u1');
-
-      expect(txRepo.delete).toHaveBeenCalledWith({
-        planId: 'p1',
-        source: ShoppingItemSource.DERIVED,
+      expect(lockPlan).toHaveBeenCalledWith(manager, 'p1');
+      expect(reconcileDerived).toHaveBeenCalledWith(manager, 'p1', {
+        restoreDismissed: true,
       });
-    });
-
-    it('recreates every line from the meals, unchecked, with the recipe unit', async () => {
-      planService.ensureForUser.mockResolvedValue(tomatoPlan());
-
-      await service.sync('u1');
-
-      expect(txRepo.create).toHaveBeenCalledWith({
-        planId: 'p1',
-        source: ShoppingItemSource.DERIVED,
-        ingredientId: 'i1',
-        name: 'Tomate',
-        unit: 'g',
-        quantity: 250,
-        checked: false,
-      });
-      expect(txRepo.delete.mock.invocationCallOrder[0]).toBeLessThan(
-        txRepo.save.mock.invocationCallOrder[0],
+      expect(jest.mocked(lockPlan).mock.invocationCallOrder[0]).toBeLessThan(
+        jest.mocked(reconcileDerived).mock.invocationCallOrder[0],
       );
-    });
-
-    it('empties the derived items when the plan has no meal left', async () => {
-      planService.ensureForUser.mockResolvedValue(plan([]));
-
-      await service.sync('u1');
-
-      expect(txRepo.delete).toHaveBeenCalled();
-      expect(txRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('swallows the unique violation of a concurrent sync, then reads', async () => {
-      planService.ensureForUser.mockResolvedValue(tomatoPlan());
-      txRepo.save.mockRejectedValue(
-        new QueryFailedError('INSERT', [], { code: '23505' } as never),
-      );
-
-      await expect(service.sync('u1')).resolves.toBeDefined();
-      expect(items.find).toHaveBeenCalledWith({ where: { planId: 'p1' } });
     });
 
     it('propagates a write failure so the transaction rolls back', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          {
-            servings: 1,
-            meal: { ingredients: [mi('i1', 'Tomate', 'g', 250)] },
-          },
-        ]),
-      );
-      txRepo.save.mockRejectedValue(new Error('write failed'));
-
+      jest
+        .mocked(reconcileDerived)
+        .mockRejectedValue(new Error('write failed'));
       await expect(service.sync('u1')).rejects.toThrow('write failed');
-    });
-
-    it('aggregates by ingredient + unit scaled by servings, rounded to 2 decimals', async () => {
-      planService.ensureForUser.mockResolvedValue(
-        plan([
-          { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.1)] } },
-          { servings: 1, meal: { ingredients: [mi('i1', 'Huile', 'l', 0.2)] } },
-        ]),
-      );
-
-      await service.sync('u1');
-
-      expect(txRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ quantity: 0.3 }),
-      );
     });
   });
 
   describe('addItem', () => {
     it('creates a MANUAL item without ingredient', async () => {
-      planService.ensureForUser.mockResolvedValue(plan([]));
+      planService.ensureForUser.mockResolvedValue(plan());
       await service.addItem('u1', {
         name: 'Éponges',
         quantity: 2,
@@ -405,14 +277,26 @@ describe('ShoppingListService', () => {
       );
       await service.updateItem('u1', 'it1', { checked: true });
       expect(items.findOne).toHaveBeenCalledWith({
-        where: { id: 'it1', plan: { userId: 'u1' } },
+        where: { id: 'it1', dismissed: false, plan: { userId: 'u1' } },
       });
     });
   });
 
   describe('removeItem', () => {
-    it('removes an owned item', async () => {
-      const item = derivedItem('it1', 'i1', 'g', 'Tomate', 250);
+    it('dismisses a DERIVED item instead of deleting it', async () => {
+      items.findOne.mockResolvedValue(
+        derivedItem('it1', 'i1', 'g', 'Tomate', 250),
+      );
+      await service.removeItem('u1', 'it1');
+      expect(items.update).toHaveBeenCalledWith('it1', { dismissed: true });
+      expect(items.remove).not.toHaveBeenCalled();
+    });
+
+    it('deletes a MANUAL item', async () => {
+      const item = {
+        ...derivedItem('it1', 'i1', 'g', 'Éponges', 2),
+        source: ShoppingItemSource.MANUAL,
+      };
       items.findOne.mockResolvedValue(item);
       await service.removeItem('u1', 'it1');
       expect(items.remove).toHaveBeenCalledWith(item);
@@ -424,7 +308,7 @@ describe('ShoppingListService', () => {
       );
       await service.removeItem('u1', 'it1');
       expect(items.findOne).toHaveBeenCalledWith({
-        where: { id: 'it1', plan: { userId: 'u1' } },
+        where: { id: 'it1', dismissed: false, plan: { userId: 'u1' } },
       });
     });
 
