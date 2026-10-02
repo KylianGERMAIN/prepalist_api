@@ -46,6 +46,10 @@ export class Meal {
   @Column({ type: 'text', array: true, default: () => "'{}'" })
   tags!: string[];
 
+  /** Hors des SELECT par défaut : seul le détail (`MealsService.findOne`) la charge. */
+  @Column({ type: 'text', nullable: true, select: false })
+  description?: string | null;
+
   @ApiProperty()
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
