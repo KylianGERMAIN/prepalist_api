@@ -204,9 +204,8 @@ export class PlanService {
         }
       }
       patch.mealId = dto.mealId;
-      if (dto.mealId !== null) {
-        patch.away = false;
-      }
+      // Vider un créneau le remet à « non décidé », « dehors » compris.
+      patch.away = false;
     }
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;

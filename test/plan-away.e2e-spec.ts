@@ -133,4 +133,19 @@ describe('Créneaux « dehors » (e2e)', () => {
       ),
     ).rejects.toMatchObject({ code: '23514' });
   });
+
+  it('sort du mode dehors avec away à false, ou en vidant le créneau', async () => {
+    const all = await slots();
+    const lunch = at(all, 0, 'LUNCH');
+    const dinner = at(all, 0, 'DINNER');
+    await patch(lunch.id, { away: true }).expect(200);
+    await patch(dinner.id, { away: true }).expect(200);
+
+    await patch(lunch.id, { away: false }).expect(200);
+    await patch(dinner.id, { mealId: null }).expect(200);
+
+    const after = await slots();
+    expect(at(after, 0, 'LUNCH')).toMatchObject({ away: false, mealId: null });
+    expect(at(after, 0, 'DINNER')).toMatchObject({ away: false, mealId: null });
+  });
 });

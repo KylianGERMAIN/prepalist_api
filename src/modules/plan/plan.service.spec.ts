@@ -261,6 +261,20 @@ describe('PlanService', () => {
       expect(await pick(5.1)).toBe('low');
     });
 
+    it('ne prend pas un dîner dehors pour des restes', async () => {
+      const dinner = slot('s1', 0, MealSlot.DINNER, null, true);
+      const nextLunch = slot('s2', 1, MealSlot.LUNCH);
+      plans.findOne.mockResolvedValue(planOf([dinner, nextLunch]));
+      meals.find.mockResolvedValue([meal('m1')]);
+      const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+
+      await service.generate('u1');
+
+      expect(dinner.mealId).toBeNull();
+      expect(nextLunch.mealId).toBe('m1');
+      random.mockRestore();
+    });
+
     it('peut reprendre le dîner du jour J au déjeuner du jour J+1 (restes)', async () => {
       const dinner = slot('s1', 0, MealSlot.DINNER, 'm-dinner');
       const nextLunch = slot('s2', 1, MealSlot.LUNCH);
@@ -300,6 +314,7 @@ describe('PlanService', () => {
       expect(meals.findOne).not.toHaveBeenCalled();
       expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's1', {
         mealId: null,
+        away: false,
       });
     });
 
