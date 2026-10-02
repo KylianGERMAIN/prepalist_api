@@ -188,7 +188,7 @@ export class PlanService {
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;
     }
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && !dto.alsoNext) {
       return plan;
     }
 
@@ -207,13 +207,21 @@ export class PlanService {
 
     await this.plans.manager.transaction(async (manager) => {
       await lockPlan(manager, plan.id);
-      // update() écrit les colonnes directement (évite le conflit FK/relation).
-      await manager.update(PlanSlot, slotId, patch);
+      if (Object.keys(patch).length > 0) {
+        // update() écrit les colonnes directement (évite le conflit FK/relation).
+        await manager.update(PlanSlot, slotId, patch);
+      }
       if (nextId) {
-        await manager.update(PlanSlot, nextId, {
-          mealId: patch.mealId !== undefined ? patch.mealId : slot.mealId,
-          servings: patch.servings ?? slot.servings,
+        // Relu sous le verrou : lu avant, il pourrait recopier un repas déjà remplacé.
+        const { mealId, servings } = await manager.findOneByOrFail(PlanSlot, {
+          id: slotId,
         });
+        if (!mealId) {
+          throw new BadRequestException(
+            'Rien à reporter : le créneau est vide',
+          );
+        }
+        await manager.update(PlanSlot, nextId, { mealId, servings });
       }
       await reconcileDerived(manager, plan.id);
     });

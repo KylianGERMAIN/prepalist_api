@@ -55,7 +55,8 @@ rétrograde pas le compte : repasser `role = 'USER'` en base.
 - **Phase 2** — plan de repas : `Plan` / `PlanSlot`, un seul plan par utilisateur
   créé à la volée sur `GET /plan` (`dayCount` jours × midi/soir), créneaux rangés
   par `dayIndex` et non par date. `POST /plan/generate` (génération pondérée
-  par la note + règle des restes), `PATCH /plan/slots/:slotId`,
+  par la note + règle des restes), `PATCH /plan/slots/:slotId` (`alsoNext`
+  recopie le créneau sur le suivant),
   `DELETE /plan/slots` (vide les créneaux et les items dérivés, réancre
   `startDate` sur le jour de courses).
 - **Phase 3** — liste de courses : `GET /plan/shopping-list`, table matérialisée

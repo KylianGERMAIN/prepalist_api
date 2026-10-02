@@ -5,7 +5,6 @@ export interface SlotPosition {
   slot: MealSlot;
 }
 
-/** Midi → soir du même jour, soir → midi du lendemain ; `null` après le dernier dîner. */
 export function nextSlotOf(
   { dayIndex, slot }: SlotPosition,
   dayCount: number,

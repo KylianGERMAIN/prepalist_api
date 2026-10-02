@@ -123,20 +123,39 @@ describe('Créneau suivant (e2e)', () => {
     expect(list.body.items).toMatchObject([{ name: 'Lardons', quantity: 200 }]);
   });
 
-  it('vide aussi le créneau suivant avec mealId null', async () => {
+  it('refuse de reporter un créneau vide, sans toucher au suivant', async () => {
     const all = await slots();
-    await patch(at(all, 1, 'LUNCH').id, {
-      mealId: carbo,
-      alsoNext: true,
-    }).expect(200);
+    await patch(at(all, 1, 'DINNER').id, { mealId: wraps }).expect(200);
 
     await patch(at(all, 1, 'LUNCH').id, {
       mealId: null,
       alsoNext: true,
+    }).expect(400);
+
+    expect(at(await slots(), 1, 'DINNER').mealId).toBe(wraps);
+  });
+
+  it('reporte l’état actuel avec alsoNext seul', async () => {
+    const all = await slots();
+    await patch(at(all, 2, 'LUNCH').id, { mealId: carbo, servings: 2 }).expect(
+      200,
+    );
+
+    await patch(at(all, 2, 'LUNCH').id, { alsoNext: true }).expect(200);
+
+    expect(at(await slots(), 2, 'DINNER')).toMatchObject({
+      mealId: carbo,
+      servings: 2,
+    });
+  });
+
+  it('ne touche pas au suivant avec alsoNext à false', async () => {
+    const all = await slots();
+    await patch(at(all, 2, 'LUNCH').id, {
+      mealId: carbo,
+      alsoNext: false,
     }).expect(200);
 
-    const after = await slots();
-    expect(at(after, 1, 'LUNCH').mealId).toBeNull();
-    expect(at(after, 1, 'DINNER').mealId).toBeNull();
+    expect(at(await slots(), 2, 'DINNER').mealId).toBeNull();
   });
 });
