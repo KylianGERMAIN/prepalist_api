@@ -1,9 +1,10 @@
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { isProduction } from './common/environment';
 import { APP_VERSION } from './common/version';
 import { configureApp } from './common/configure-app';
+import { buildOpenApiDocument } from './common/openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,13 +13,7 @@ async function bootstrap() {
 
   // `/docs-json` est une route non authentifiée qui livre toute la surface d'API.
   if (!isProduction(process.env.NODE_ENV)) {
-    const swaggerConfig = new DocumentBuilder()
-      .setTitle('PrepaList API')
-      .setDescription('API meal-prep PrepaList v2')
-      .setVersion(APP_VERSION)
-      .addBearerAuth()
-      .build();
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    const document = buildOpenApiDocument(app, APP_VERSION);
     SwaggerModule.setup('docs', app, document);
   }
 

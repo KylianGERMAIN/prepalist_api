@@ -1,0 +1,33 @@
+name: PR title
+
+# Le squash merge d'une PR à plusieurs commits reprend son titre comme sujet de commit.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  conventional:
+    # Dependabot n'a pas de numéro d'issue ; son label arrive après l'ouverture, trop tard pour `ignoreLabels`.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            chore
+            refactor
+            test
+            docs
+            build
+            ci
+          # Issue du dépôt ou d'un autre (`prepalist_front#28`), ou release `chore(release): vX.Y.Z`.
+          subjectPattern: ^(?:.+ \((?:[\w-]+)?#\d+\)|v\d+\.\d+\.\d+)$
+          subjectPatternError: 'Le sujet doit finir par le numéro d’issue : "type(scope): subject (#12)".'
