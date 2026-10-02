@@ -133,12 +133,6 @@ export class MealsService {
     });
   }
 
-  async markCooked(userId: string, id: string): Promise<MealView> {
-    await this.findOne(id); // 404 si absent
-    await this.state.markCooked(userId, id);
-    return this.findOneFor(userId, id);
-  }
-
   async updateState(
     userId: string,
     id: string,

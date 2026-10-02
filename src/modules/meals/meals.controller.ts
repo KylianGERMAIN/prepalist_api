@@ -96,16 +96,4 @@ export class MealsController {
   ) {
     return this.meals.updateState(userId, id, dto);
   }
-
-  @Post(':id/cooked')
-  @ApiOperation({
-    summary: 'Marque un repas comme cuisiné par le compte appelant',
-  })
-  @ApiCreatedResponse({ type: MealDto })
-  markCooked(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.meals.markCooked(userId, id);
-  }
 }

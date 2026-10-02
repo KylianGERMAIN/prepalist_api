@@ -7,16 +7,12 @@ import { UserMealState } from './entities/user-meal-state.entity';
 
 export interface MealStateFields {
   rating: number | null;
-  lastCookedAt: Date | null;
-  timesCooked: number;
 }
 
 export type MealView = Meal & MealStateFields;
 
 const NEVER_TOUCHED: MealStateFields = {
   rating: null,
-  lastCookedAt: null,
-  timesCooked: 0,
 };
 
 @Injectable()
@@ -58,22 +54,8 @@ export class MealStateService {
         r.mealId,
         {
           rating: r.rating,
-          lastCookedAt: r.lastCookedAt,
-          timesCooked: r.timesCooked,
         },
       ]),
-    );
-  }
-
-  /** Incrément en SQL, sinon deux cuissons concurrentes n'en compteraient qu'une. */
-  markCooked(userId: string, mealId: string): Promise<void> {
-    return this.states.query(
-      `INSERT INTO "user_meal_state" ("user_id", "meal_id", "last_cooked_at", "times_cooked")
-       VALUES ($1, $2, now(), 1)
-       ON CONFLICT ("user_id", "meal_id") DO UPDATE SET
-         "last_cooked_at" = now(),
-         "times_cooked" = "user_meal_state"."times_cooked" + 1`,
-      [userId, mealId],
     );
   }
 
