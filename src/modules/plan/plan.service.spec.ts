@@ -405,6 +405,9 @@ describe('PlanService', () => {
       await expect(service.moveSlot('u1', 's1', 'ailleurs')).rejects.toThrow(
         NotFoundException,
       );
+      await expect(service.moveSlot('u1', 'ailleurs', 's1')).rejects.toThrow(
+        NotFoundException,
+      );
       expect(transaction).not.toHaveBeenCalled();
     });
 

@@ -95,13 +95,14 @@ describe('Déplacer un créneau (e2e)', () => {
     expect(at(after, 5, 'LUNCH')).toMatchObject({ mealId: carbo, servings: 3 });
   });
 
-  it('échange deux créneaux occupés, sans changer la liste', async () => {
+  it('échange un repas avec un créneau dehors, sans changer la liste', async () => {
     const all = await slots();
     await patch(at(all, 0, 'LUNCH').id, { mealId: carbo, servings: 2 });
     await patch(at(all, 1, 'LUNCH').id, { away: true });
     const before = await request(app.getHttpServer())
       .get('/plan/shopping-list')
-      .set(...bearer(user));
+      .set(...bearer(user))
+      .expect(200);
 
     await move(at(all, 0, 'LUNCH').id, at(all, 1, 'LUNCH').id).expect(200);
 
@@ -114,7 +115,34 @@ describe('Déplacer un créneau (e2e)', () => {
     });
     const list = await request(app.getHttpServer())
       .get('/plan/shopping-list')
-      .set(...bearer(user));
+      .set(...bearer(user))
+      .expect(200);
+    expect(list.body.items).toEqual(before.body.items);
+  });
+
+  it('échange deux repas avec leurs portions, sans changer la liste', async () => {
+    const all = await slots();
+    const a = at(all, 2, 'LUNCH');
+    const b = at(all, 4, 'DINNER');
+    await patch(a.id, { mealId: carbo, servings: 2 });
+    await patch(b.id, { mealId: wraps, servings: 3 });
+    const before = await request(app.getHttpServer())
+      .get('/plan/shopping-list')
+      .set(...bearer(user))
+      .expect(200);
+
+    await move(a.id, b.id).expect(200);
+
+    const after = await slots();
+    expect(at(after, 2, 'LUNCH')).toMatchObject({ mealId: wraps, servings: 3 });
+    expect(at(after, 4, 'DINNER')).toMatchObject({
+      mealId: carbo,
+      servings: 2,
+    });
+    const list = await request(app.getHttpServer())
+      .get('/plan/shopping-list')
+      .set(...bearer(user))
+      .expect(200);
     expect(list.body.items).toEqual(before.body.items);
   });
 

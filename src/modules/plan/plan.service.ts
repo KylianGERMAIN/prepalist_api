@@ -271,8 +271,9 @@ export class PlanService {
     }
 
     await this.plans.manager.transaction(async (manager) => {
-      // Le verrou du plan sérialise déjà toute écriture sur ses créneaux : deux
-      // échanges croisés s'exécutent l'un après l'autre, sans deadlock.
+      // Toute écriture sur les créneaux d'un plan prend d'abord ce verrou (y compris
+      // la suppression d'un repas planifié) : deux échanges croisés s'exécutent
+      // l'un après l'autre, sans deadlock.
       await lockPlan(manager, plan.id);
       const [source, target] = await Promise.all(
         [slotId, targetSlotId].map((id) =>
