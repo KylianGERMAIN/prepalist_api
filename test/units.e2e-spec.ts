@@ -56,6 +56,33 @@ describe('Jeu d’unités fermé (e2e)', () => {
     await createMeal(unit).expect(400);
   });
 
+  it('donne l’unité de la ligne à un ingrédient qui n’en a pas, sans écraser les autres', async () => {
+    const persil = await request(app.getHttpServer())
+      .post('/ingredients')
+      .set(...bearer(admin))
+      .send({ name: 'Persil' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post('/meals')
+      .set(...bearer(admin))
+      .send({
+        name: 'Taboulé',
+        ingredients: [
+          { ingredientId: persil.body.id, quantity: 10, unit: 'g' },
+          { ingredientId, quantity: 1, unit: 'pièce' },
+        ],
+      })
+      .expect(201);
+
+    const rows: { name: string; default_unit: string }[] = await db.query(
+      `SELECT name, default_unit FROM ingredients ORDER BY name`,
+    );
+    expect(rows).toEqual([
+      { name: 'Jambon', default_unit: 'tranche' },
+      { name: 'Persil', default_unit: 'g' },
+    ]);
+  });
+
   it('refuse une unité hors du jeu sur un ingrédient', async () => {
     await request(app.getHttpServer())
       .post('/ingredients')

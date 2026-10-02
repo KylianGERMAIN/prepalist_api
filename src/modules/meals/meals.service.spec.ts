@@ -13,7 +13,7 @@ describe('MealsService', () => {
     createQueryBuilder: jest.Mock;
   };
   let mealIngredients: { create: jest.Mock };
-  let ingredients: { find: jest.Mock };
+  let ingredients: { find: jest.Mock; update: jest.Mock };
   let state: {
     attachFor: jest.Mock;
     markCooked: jest.Mock;
@@ -30,7 +30,7 @@ describe('MealsService', () => {
       createQueryBuilder: jest.fn(),
     };
     mealIngredients = { create: jest.fn((x: unknown) => x) };
-    ingredients = { find: jest.fn() };
+    ingredients = { find: jest.fn(), update: jest.fn() };
     state = {
       attachFor: jest.fn((_: unknown, meals: unknown) => meals),
       markCooked: jest.fn(),

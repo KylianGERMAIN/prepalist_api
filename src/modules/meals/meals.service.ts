@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { PaginatedDto } from '../../common/dto/paginated.dto';
 import { Ingredient } from '../ingredients/entities/ingredient.entity';
 import { CreateMealDto } from './dto/create-meal.dto';
@@ -42,6 +42,7 @@ export class MealsService {
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
     const saved = await this.meals.save(meal);
+    await this.adoptDefaultUnits(dto.ingredients ?? []);
     // Relit : les lignes de buildIngredients n'ont pas leur relation `ingredient`
     // hydratée, la réponse omettrait le nom de l'ingrédient.
     return this.findOneFor(userId, saved.id);
@@ -114,6 +115,7 @@ export class MealsService {
     }
 
     await this.meals.save(meal);
+    await this.adoptDefaultUnits(dto.ingredients ?? []);
     // Même raison que dans `create` : la réponse doit avoir la forme du GET.
     return this.findOneFor(userId, id);
   }
@@ -137,6 +139,17 @@ export class MealsService {
     await this.findOne(id); // 404 si absent
     await this.state.patch(userId, id, dto);
     return this.findOneFor(userId, id);
+  }
+
+  // Seul chemin qui donne une unité à un ingrédient créé sans : le front le crée
+  // avant que la ligne ait la sienne, et aucune route ne la fixe après coup.
+  private async adoptDefaultUnits(items: MealIngredientDto[]): Promise<void> {
+    for (const item of items) {
+      await this.ingredients.update(
+        { id: item.ingredientId, defaultUnit: IsNull() },
+        { defaultUnit: item.unit },
+      );
+    }
   }
 
   private async buildIngredients(
