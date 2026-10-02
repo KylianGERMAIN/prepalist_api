@@ -7,5 +7,7 @@ import { APP_VERSION } from './common/version';
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
   release: APP_VERSION,
-  environment: process.env.NODE_ENV,
+  environment: process.env.NODE_ENV?.trim().toLowerCase(),
+  // Par défaut le SDK joint le corps brut : mots de passe et refresh tokens de `/auth/*`.
+  dataCollection: { httpBodies: [], userInfo: false },
 });

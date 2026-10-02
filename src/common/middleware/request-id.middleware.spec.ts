@@ -2,7 +2,9 @@ import type { Request, Response } from 'express';
 import { requestId } from './request-id.middleware';
 
 function run(header?: string) {
-  const req = { headers: header ? { 'x-request-id': header } : {} } as Request;
+  const req = {
+    headers: header === undefined ? {} : { 'x-request-id': header },
+  } as Request;
   const res = { setHeader: jest.fn() } as unknown as Response;
   requestId(req, res, jest.fn());
   return (req as Request & { id: string }).id;

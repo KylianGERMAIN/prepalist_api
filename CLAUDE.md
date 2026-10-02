@@ -27,7 +27,7 @@ helmet · class-validator / class-transformer. Jest pour les specs.
 ```
 src/
   config/data-source.ts     # options TypeORM partagées app + CLI migrations
-  common/                   # dto paginated, guards, decorators, filter, middleware, interceptor
+  common/                   # dto paginated, guards, decorators, filter, middleware, logger (pino)
   modules/
     health/ users/ token/ auth/
   migrations/

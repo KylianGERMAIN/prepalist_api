@@ -7,6 +7,7 @@ import { requestId } from './middleware/request-id.middleware';
 /** Partagé avec les tests e2e : ce qui n'est pas ici n'est pas testé. */
 export function configureApp(app: INestApplication): void {
   app.use(helmet());
+  // Avant pino-http (middleware de module, enregistré à `init()`), qui reprend `req.id`.
   app.use(requestId);
 
   app.enableCors({
