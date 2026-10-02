@@ -12,7 +12,6 @@ import {
 
 interface MealBody {
   id: string;
-  isFavorite: boolean;
   rating: number | null;
   lastCookedAt: string | null;
   timesCooked: number;
@@ -113,33 +112,30 @@ describe('État par utilisateur (e2e)', () => {
     expect(await detail(alice)).toMatchObject({ timesCooked: 2 });
   });
 
-  it('garde favori et note propres au compte', async () => {
+  it('garde la note propre au compte', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true, rating: 5 })
+      .send({ rating: 5 })
       .expect(200);
 
-    expect(await detail(alice)).toMatchObject({ isFavorite: true, rating: 5 });
-    expect(await detail(bob)).toMatchObject({
-      isFavorite: false,
-      rating: null,
-    });
+    expect(await detail(alice)).toMatchObject({ rating: 5 });
+    expect(await detail(bob)).toMatchObject({ rating: null });
   });
 
   it('ne réserve pas /state à l’admin', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true })
+      .send({ rating: 3 })
       .expect(200);
   });
 
-  it('efface la note sans toucher au favori', async () => {
+  it('efface la note avec null', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true, rating: 4 })
+      .send({ rating: 4 })
       .expect(200);
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
@@ -147,25 +143,7 @@ describe('État par utilisateur (e2e)', () => {
       .send({ rating: null })
       .expect(200);
 
-    expect(await detail(alice)).toMatchObject({
-      isFavorite: true,
-      rating: null,
-    });
-  });
-
-  // Le filtre porte sur l'état du demandeur : sans le NOT EXISTS, favorite=false
-  // ne rendrait que les repas déjà notés par le compte.
-  it('filtre les favoris par compte', async () => {
-    await request(app.getHttpServer())
-      .patch(`/meals/${mealId}/state`)
-      .set(...bearer(alice))
-      .send({ isFavorite: true })
-      .expect(200);
-
-    expect((await list(alice, '?favorite=true')).items).toHaveLength(1);
-    expect((await list(alice, '?favorite=false')).items).toHaveLength(0);
-    expect((await list(bob, '?favorite=true')).items).toHaveLength(0);
-    expect((await list(bob, '?favorite=false')).items).toHaveLength(1);
+    expect(await detail(alice)).toMatchObject({ rating: null });
   });
 
   it('rend la liste avec l’état du demandeur', async () => {
@@ -175,12 +153,19 @@ describe('État par utilisateur (e2e)', () => {
     expect((await list(bob)).items[0]).toMatchObject({ timesCooked: 0 });
   });
 
-  it('refuse un favori null', async () => {
-    await request(app.getHttpServer())
+  it('refuse un favori, champ et filtre retirés du contrat', async () => {
+    const patch = await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: null })
+      .send({ isFavorite: true })
       .expect(400);
+    expect(JSON.stringify(patch.body)).toContain('isFavorite');
+
+    const filter = await request(app.getHttpServer())
+      .get('/meals?favorite=true')
+      .set(...bearer(alice))
+      .expect(400);
+    expect(JSON.stringify(filter.body)).toContain('favorite');
   });
 
   // Seul test qui échoue si `ensureForUser` cesse de réinjecter dans les slots

@@ -20,11 +20,6 @@ import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal, MealStatus } from './entities/meal.entity';
 import { MealStateService, MealView } from './meal-state.service';
 
-const FAVORITE_OF_USER = `EXISTS (
-  SELECT 1 FROM "user_meal_state" s
-  WHERE s."meal_id" = meal.id AND s."user_id" = :userId AND s."is_favorite"
-)`;
-
 @Injectable()
 export class MealsService {
   constructor(
@@ -60,12 +55,6 @@ export class MealsService {
   ): Promise<PaginatedDto<MealView>> {
     const qb = this.meals.createQueryBuilder('meal');
 
-    if (query.favorite !== undefined) {
-      qb.andWhere(
-        query.favorite ? FAVORITE_OF_USER : `NOT ${FAVORITE_OF_USER}`,
-        { userId },
-      );
-    }
     if (query.name) {
       qb.andWhere('meal.name ILIKE :name', { name: `%${query.name}%` });
     }

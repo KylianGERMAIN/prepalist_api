@@ -50,18 +50,18 @@ rétrograde pas le compte : repasser `role = 'USER'` en base.
 
 - **Phase 0** — socle : config, health, users, auth (register / login / refresh JWT), CI.
 - **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
-  CRUD `meals` (scopé user, filtres favorite/tag/name, `POST /:id/cooked`),
+  CRUD `meals` (filtres tag/name, note par compte, `POST /:id/cooked`),
   catalogue `ingredients` (recherche ILike).
 - **Phase 2** — plan de repas : `Plan` / `PlanSlot`, un seul plan par utilisateur
   créé à la volée sur `GET /plan` (`dayCount` jours × midi/soir), créneaux rangés
   par `dayIndex` et non par date. `POST /plan/generate` (génération pondérée
-  favori/fraîcheur + règle des restes), `PATCH /plan/slots/:slotId`,
+  note/fraîcheur + règle des restes), `PATCH /plan/slots/:slotId`,
   `DELETE /plan/slots` (vide les créneaux et les items dérivés, réancre
   `startDate` sur le jour de courses).
 - **Phase 3** — liste de courses : `GET /plan/shopping-list`, table matérialisée
-  `shopping_list_items`, synchronisation explicite `POST /plan/shopping-list/sync`
-  qui réécrit les items dérivés depuis les plats (coches et éditions perdues,
-  items manuels conservés), CRUD des items par `itemId`.
+  `shopping_list_items`, items dérivés réconciliés à chaque écriture sur le plan
+  (coches conservées), `POST /plan/shopping-list/sync` pour ramener les dérivés
+  supprimés à la main, CRUD des items par `itemId`, suppression multiple et vidage.
 
 Phase 4 (capture IA) écartée volontairement. Phase 5 (rappel hebdo par cron)
 retirée : la livraison n'était qu'un log, et « pas encore planifié » n'a plus de

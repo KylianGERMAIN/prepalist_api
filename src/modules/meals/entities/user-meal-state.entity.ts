@@ -25,10 +25,6 @@ export class UserMealState {
   @PrimaryColumn({ name: 'meal_id', type: 'uuid' })
   mealId!: string;
 
-  @ApiProperty()
-  @Column({ name: 'is_favorite', default: false })
-  isFavorite!: boolean;
-
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })
   @Column({ type: 'int', nullable: true })
   rating!: number | null;
