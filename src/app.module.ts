@@ -1,13 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { LoggerModule } from 'nestjs-pino';
 import { isProduction } from './common/environment';
 import { dataSourceOptions } from './config/data-source';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { loggerParams } from './common/logger';
 import { AuthModule } from './modules/auth/auth.module';
 import { HealthModule } from './modules/health/health.module';
 import { IngredientsModule } from './modules/ingredients/ingredients.module';
@@ -46,6 +47,7 @@ function validateEnv(config: Record<string, unknown>) {
       envFilePath: ['.env.local', '.env'],
       validate: validateEnv,
     }),
+    LoggerModule.forRoot(loggerParams(process.env.NODE_ENV)),
     TypeOrmModule.forRootAsync({
       useFactory: () => ({ ...dataSourceOptions, autoLoadEntities: true }),
     }),
@@ -68,7 +70,6 @@ function validateEnv(config: Record<string, unknown>) {
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     // Après JwtAuthGuard : req.user doit être peuplé pour que @Roles() s'applique.
     { provide: APP_GUARD, useClass: RolesGuard },
-    { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
   ],
 })
 export class AppModule {}
