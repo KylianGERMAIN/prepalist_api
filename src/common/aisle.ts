@@ -13,11 +13,9 @@ export enum Aisle {
   OTHER = 'OTHER',
 }
 
-const RANK = new Map(
-  Object.values(Aisle).map((aisle, index) => [aisle, index]),
-);
+export const AISLE_ORDER = Object.values(Aisle);
 
 /** `null` (rayon non renseigné) se range avec « Autre ». */
 export function aisleRank(aisle: Aisle | null): number {
-  return RANK.get(aisle ?? Aisle.OTHER) ?? RANK.size;
+  return AISLE_ORDER.indexOf(aisle ?? Aisle.OTHER);
 }

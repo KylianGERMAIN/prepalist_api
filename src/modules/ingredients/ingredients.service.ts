@@ -39,6 +39,7 @@ export class IngredientsService {
     const ingredient = this.ingredients.create({
       name,
       defaultUnit: dto.defaultUnit ?? null,
+      aisle: dto.aisle ?? null,
     });
     try {
       return await this.ingredients.save(ingredient);

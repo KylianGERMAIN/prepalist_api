@@ -117,4 +117,58 @@ describe('Rayons (e2e)', () => {
       .expect(403);
     await setAisle('Crème', 'RAYON').expect(400);
   });
+
+  const itemId = async (name: string) =>
+    (
+      (
+        await request(app.getHttpServer())
+          .get('/plan/shopping-list')
+          .set(...bearer(user))
+      ).body.items as { id: string; name: string }[]
+    ).find((i) => i.name === name)?.id;
+
+  it('range les cochés après les autres, dans leur rayon', async () => {
+    await setAisle('Glace', 'FROZEN').expect(200);
+    await setAisle('Crème', 'DAIRY').expect(200);
+    await setAisle('Courgette', 'DAIRY').expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/plan/shopping-list/items/${await itemId('Courgette')}`)
+      .set(...bearer(user))
+      .send({ checked: true })
+      .expect(200);
+
+    expect((await list()).map((i) => i.name)).toEqual([
+      'Crème',
+      'Courgette',
+      'Glace',
+    ]);
+  });
+
+  it('renvoie le rayon de l’ingrédient au PATCH, et refuse de le changer sur un dérivé', async () => {
+    await setAisle('Crème', 'DAIRY').expect(200);
+    const creme = await itemId('Crème');
+
+    const res = await request(app.getHttpServer())
+      .patch(`/plan/shopping-list/items/${creme}`)
+      .set(...bearer(user))
+      .send({ checked: true })
+      .expect(200);
+    expect(res.body.aisle).toBe('DAIRY');
+
+    await request(app.getHttpServer())
+      .patch(`/plan/shopping-list/items/${creme}`)
+      .set(...bearer(user))
+      .send({ aisle: 'FROZEN' })
+      .expect(400);
+  });
+
+  it('expose l’ordre de parcours des rayons', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/plan/shopping-list')
+      .set(...bearer(user))
+      .expect(200);
+    expect(res.body.aisleOrder[0]).toBe('PRODUCE');
+    expect(res.body.aisleOrder.at(-1)).toBe('OTHER');
+  });
 });

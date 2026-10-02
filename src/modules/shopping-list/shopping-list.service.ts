@@ -122,12 +122,14 @@ export class ShoppingListService {
       if (dto.quantity !== undefined) {
         item.quantity = dto.quantity;
       }
-      // Le rayon d'un dérivé est celui de son ingrédient (PATCH /ingredients/:id).
-      if (
-        dto.aisle !== undefined &&
-        item.source === ShoppingItemSource.MANUAL
-      ) {
-        item.aisle = dto.aisle;
+      if (dto.aisle !== undefined) {
+        if (item.source === ShoppingItemSource.MANUAL) {
+          item.aisle = dto.aisle;
+        } else if (dto.aisle !== (item.ingredient?.aisle ?? null)) {
+          throw new BadRequestException(
+            'Le rayon d’un article issu des plats se change sur son ingrédient',
+          );
+        }
       }
       if (dto.unit !== undefined && dto.unit !== item.unit) {
         // Comparé à l'unité actuelle : un article antérieur au jeu fermé doit
@@ -196,6 +198,8 @@ export class ShoppingListService {
   ): Promise<ShoppingListItem> {
     const item = await manager.findOne(ShoppingListItem, {
       where: { id: itemId, dismissed: false, plan: { userId } },
+      // Le rayon d'un dérivé vient de son ingrédient : sans lui, la réponse dirait null.
+      relations: { ingredient: true },
     });
     if (!item) {
       throw new NotFoundException('Item introuvable');

@@ -41,7 +41,7 @@ export class UpdateShoppingListItemDto {
     enum: Aisle,
     nullable: true,
     description:
-      'Rayon d’un article manuel. Ignoré pour un article issu des plats.',
+      'Rayon d’un article manuel. Sur un article issu des plats, 400 s’il diffère du rayon de son ingrédient.',
   })
   @IsOptional()
   @ValidateIf((_, value) => value !== null)

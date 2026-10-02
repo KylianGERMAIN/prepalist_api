@@ -56,7 +56,7 @@ src/
   `snake_case` (via `name:`), enums `UPPER_SNAKE`.
 - Toute modif de schéma = une migration générée et commitée dans le même PR.
   Ne jamais éditer une migration déjà mergée.
-- **Enum partagé (`unit_enum`)** : ajouter une valeur se fait par une migration
+- **Enum partagé (`unit_enum`, `aisle_enum`)** : ajouter une valeur se fait par une migration
   écrite à la main. `migration:generate` renomme le type et le recrée colonne
   par colonne, séquence fragile quand deux tables en dépendent.
 

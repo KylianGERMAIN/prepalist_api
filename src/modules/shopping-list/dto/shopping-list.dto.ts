@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Aisle } from '../../../common/aisle';
+import { Aisle, AISLE_ORDER } from '../../../common/aisle';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -77,6 +77,13 @@ export class ShoppingListDto {
       'Repas planifiés sans ingrédient : la liste ne les couvre pas.',
   })
   incompleteMeals: IncompleteMealDto[];
+
+  @ApiProperty({
+    enum: Aisle,
+    isArray: true,
+    description: 'Ordre de parcours des rayons, celui du tri de `items`.',
+  })
+  aisleOrder: Aisle[] = AISLE_ORDER;
 
   constructor(
     planId: string,

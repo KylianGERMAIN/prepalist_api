@@ -335,6 +335,7 @@ describe('ShoppingListService', () => {
       await service.updateItem('u1', 'it1', { checked: true });
       expect(items.findOne).toHaveBeenCalledWith({
         where: { id: 'it1', dismissed: false, plan: { userId: 'u1' } },
+        relations: { ingredient: true },
       });
     });
   });
@@ -366,6 +367,7 @@ describe('ShoppingListService', () => {
       await service.removeItem('u1', 'it1');
       expect(items.findOne).toHaveBeenCalledWith({
         where: { id: 'it1', dismissed: false, plan: { userId: 'u1' } },
+        relations: { ingredient: true },
       });
     });
 
