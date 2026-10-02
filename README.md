@@ -2,6 +2,7 @@
 
 Backend NestJS de l'application meal-prep PrepaList v2. Cf. `../instruction.md`
 pour le cadrage produit et `CLAUDE.md` pour les conventions.
+Architecture, modèle de données, flux, glossaire et décisions : [`docs/`](./docs/architecture.md).
 
 ## Prérequis
 
