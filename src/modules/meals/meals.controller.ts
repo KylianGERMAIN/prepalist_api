@@ -26,6 +26,7 @@ import { CreateMealDto } from './dto/create-meal.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
 import { MealDto } from './dto/meal.dto';
 import { PaginatedMealsDto } from './dto/paginated-meals.dto';
+import { TagCountDto } from './dto/tag-count.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealsService } from './meals.service';
@@ -44,6 +45,13 @@ export class MealsController {
   @ApiOkResponse({ type: PaginatedMealsDto })
   findAll(@CurrentUser('id') userId: string, @Query() query: MealQueryDto) {
     return this.meals.findAll(userId, query);
+  }
+
+  @Get('tags')
+  @ApiOperation({ summary: 'Tags existants, les plus utilisés en tête' })
+  @ApiOkResponse({ type: [TagCountDto] })
+  tags() {
+    return this.meals.tags();
   }
 
   @Post()

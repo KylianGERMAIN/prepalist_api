@@ -9,6 +9,7 @@ import {
   MaxLength,
   ValidateNested,
 } from 'class-validator';
+import { normalizeTags } from '../tag';
 import { MealIngredientDto } from './meal-ingredient.dto';
 
 export class CreateMealDto {
@@ -18,11 +19,21 @@ export class CreateMealDto {
   @MaxLength(200)
   name!: string;
 
-  @ApiProperty({ required: false, type: [String] })
+  @ApiProperty({
+    required: false,
+    type: [String],
+    description: 'Normalisés : minuscules, espaces réduits, doublons retirés.',
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @MaxLength(40, { each: true })
   @ArrayMaxSize(20)
+  @Transform(({ value }: { value: unknown }) =>
+    Array.isArray(value) && value.every((t) => typeof t === 'string')
+      ? normalizeTags(value)
+      : value,
+  )
   tags?: string[];
 
   @ApiProperty({

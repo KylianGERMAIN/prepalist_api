@@ -10,6 +10,7 @@ import { Ingredient } from '../ingredients/entities/ingredient.entity';
 import { CreateMealDto } from './dto/create-meal.dto';
 import { MealIngredientDto } from './dto/meal-ingredient.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
+import { TagCountDto } from './dto/tag-count.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import {
@@ -78,6 +79,19 @@ export class MealsService {
       total,
       query.page,
       query.limit,
+    );
+  }
+
+  /** Mêmes repas visibles que `findAll` : le jour où le catalogue sera scopé, les deux changent ensemble. */
+  async tags(): Promise<TagCountDto[]> {
+    const rows: TagCountDto[] = await this.meals.query(
+      `SELECT t AS name, count(*)::int AS count
+       FROM meals, unnest(tags) AS t
+       GROUP BY t`,
+    );
+    // Ex aequo triés en JS : l'ordre SQL dépendrait de la collation de la base.
+    return rows.sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'fr'),
     );
   }
 
