@@ -18,6 +18,7 @@ import { UsersService } from '../users/users.service';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
 import { Plan } from './entities/plan.entity';
+import { nextSlotOf } from './next-slot';
 import { lastWeekdayOnOrBefore, today } from './plan-dates';
 
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
@@ -187,14 +188,41 @@ export class PlanService {
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;
     }
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && !dto.alsoNext) {
       return plan;
+    }
+
+    let nextId: string | undefined;
+    if (dto.alsoNext) {
+      const position = nextSlotOf(slot, plan.dayCount);
+      nextId = plan.slots.find(
+        (s) => s.dayIndex === position?.dayIndex && s.slot === position?.slot,
+      )?.id;
+      if (!nextId) {
+        throw new BadRequestException(
+          'Aucun créneau après le dernier dîner du plan',
+        );
+      }
     }
 
     await this.plans.manager.transaction(async (manager) => {
       await lockPlan(manager, plan.id);
-      // update() écrit les colonnes directement (évite le conflit FK/relation).
-      await manager.update(PlanSlot, slotId, patch);
+      if (Object.keys(patch).length > 0) {
+        // update() écrit les colonnes directement (évite le conflit FK/relation).
+        await manager.update(PlanSlot, slotId, patch);
+      }
+      if (nextId) {
+        // Relu sous le verrou : lu avant, il pourrait recopier un repas déjà remplacé.
+        const { mealId, servings } = await manager.findOneByOrFail(PlanSlot, {
+          id: slotId,
+        });
+        if (!mealId) {
+          throw new BadRequestException(
+            'Rien à reporter : le créneau est vide',
+          );
+        }
+        await manager.update(PlanSlot, nextId, { mealId, servings });
+      }
       await reconcileDerived(manager, plan.id);
     });
     return this.ensureForUser(userId);

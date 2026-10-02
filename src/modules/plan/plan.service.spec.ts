@@ -44,11 +44,21 @@ describe('PlanService', () => {
   let meals: { find: jest.Mock; findOne: jest.Mock };
   let users: { findById: jest.Mock };
   let state: { attachFor: jest.Mock };
-  let manager: { update: jest.Mock; delete: jest.Mock; save: jest.Mock };
+  let manager: {
+    update: jest.Mock;
+    delete: jest.Mock;
+    save: jest.Mock;
+    findOneByOrFail: jest.Mock;
+  };
   let transaction: jest.Mock;
 
   beforeEach(() => {
-    manager = { update: jest.fn(), delete: jest.fn(), save: jest.fn() };
+    manager = {
+      update: jest.fn(),
+      delete: jest.fn(),
+      save: jest.fn(),
+      findOneByOrFail: jest.fn(),
+    };
     jest.mocked(reconcileDerived).mockClear();
     transaction = jest.fn(
       async (cb: (m: unknown) => unknown) => cb(manager) as unknown,
@@ -284,6 +294,71 @@ describe('PlanService', () => {
       await service.updateSlot('u1', 's1', { servings: 3 });
       expect(transaction).toHaveBeenCalledTimes(1);
       expect(reconcileDerived).toHaveBeenCalledWith(manager, 'p1');
+    });
+
+    it('écrit aussi le créneau suivant dans la même transaction', async () => {
+      plans.findOne.mockResolvedValue(
+        planOf([
+          slot('s1', 0, MealSlot.LUNCH),
+          slot('s2', 0, MealSlot.DINNER, 'm-old'),
+        ]),
+      );
+      meals.findOne.mockResolvedValue({ id: 'm1' });
+      manager.findOneByOrFail.mockResolvedValue({ mealId: 'm1', servings: 1 });
+
+      await service.updateSlot('u1', 's1', { mealId: 'm1', alsoNext: true });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
+        mealId: 'm1',
+        servings: 1,
+      });
+    });
+
+    it('recopie l’état relu sous le verrou, pas celui lu avant', async () => {
+      plans.findOne.mockResolvedValue(
+        planOf([
+          slot('s1', 0, MealSlot.LUNCH, 'm-stale'),
+          slot('s2', 0, MealSlot.DINNER),
+        ]),
+      );
+      manager.findOneByOrFail.mockResolvedValue({
+        mealId: 'm-now',
+        servings: 4,
+      });
+
+      await service.updateSlot('u1', 's1', { servings: 4, alsoNext: true });
+
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
+        mealId: 'm-now',
+        servings: 4,
+      });
+    });
+
+    it('refuse de reporter un créneau vide', async () => {
+      plans.findOne.mockResolvedValue(
+        planOf([slot('s1', 0, MealSlot.LUNCH), slot('s2', 0, MealSlot.DINNER)]),
+      );
+      manager.findOneByOrFail.mockResolvedValue({ mealId: null, servings: 1 });
+
+      await expect(
+        service.updateSlot('u1', 's1', { alsoNext: true }),
+      ).rejects.toThrow(BadRequestException);
+      expect(manager.update).not.toHaveBeenCalledWith(
+        PlanSlot,
+        's2',
+        expect.anything(),
+      );
+    });
+
+    it('refuse alsoNext sur le dernier dîner sans ouvrir de transaction', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 6, MealSlot.DINNER)]));
+      meals.findOne.mockResolvedValue({ id: 'm1' });
+
+      await expect(
+        service.updateSlot('u1', 's1', { mealId: 'm1', alsoNext: true }),
+      ).rejects.toThrow(BadRequestException);
+      expect(transaction).not.toHaveBeenCalled();
     });
 
     it('n’écrit rien pour un patch vide', async () => {
