@@ -14,13 +14,11 @@ jest.mock('../shopping-list/derived-items', () => ({
 const meal = (
   id: string,
   extra: Partial<{
-    isFavorite: boolean;
     rating: number;
     lastCookedAt: Date | null;
   }> = {},
 ) => ({
   id,
-  isFavorite: false,
   rating: 3,
   lastCookedAt: null,
   ...extra,

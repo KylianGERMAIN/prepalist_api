@@ -7,7 +7,6 @@ import { Meal } from './entities/meal.entity';
 import { UserMealState } from './entities/user-meal-state.entity';
 
 export interface MealStateFields {
-  isFavorite: boolean;
   rating: number | null;
   lastCookedAt: Date | null;
   timesCooked: number;
@@ -16,7 +15,6 @@ export interface MealStateFields {
 export type MealView = Meal & MealStateFields;
 
 const NEVER_TOUCHED: MealStateFields = {
-  isFavorite: false,
   rating: null,
   lastCookedAt: null,
   timesCooked: 0,
@@ -60,7 +58,6 @@ export class MealStateService {
       rows.map((r) => [
         r.mealId,
         {
-          isFavorite: r.isFavorite,
           rating: r.rating,
           lastCookedAt: r.lastCookedAt,
           timesCooked: r.timesCooked,
@@ -87,9 +84,6 @@ export class MealStateService {
     dto: UpdateMealStateDto,
   ): Promise<void> {
     const patch: QueryDeepPartialEntity<UserMealState> = {};
-    if (dto.isFavorite !== undefined) {
-      patch.isFavorite = dto.isFavorite;
-    }
     if (dto.rating !== undefined) {
       patch.rating = dto.rating;
     }

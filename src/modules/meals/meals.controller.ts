@@ -38,7 +38,7 @@ export class MealsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Liste paginée du catalogue de repas (filtres favorite/tag/name)',
+    summary: 'Liste paginée du catalogue de repas (filtres tag/name)',
   })
   @ApiOkResponse({ type: PaginatedMealsDto })
   findAll(@CurrentUser('id') userId: string, @Query() query: MealQueryDto) {
@@ -86,7 +86,7 @@ export class MealsController {
 
   @Patch(':id/state')
   @ApiOperation({
-    summary: 'Favori et note du repas pour le compte appelant',
+    summary: 'Note du repas pour le compte appelant',
   })
   @ApiOkResponse({ type: MealDto })
   updateState(

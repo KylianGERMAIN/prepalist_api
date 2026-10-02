@@ -52,7 +52,7 @@ export class PlanService {
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
     const plan = await this.ensure(userId, SLOT_RELATIONS);
-    // Favori, note et cuissons appartiennent au compte, pas à la recette : sans
+    // Note et cuissons appartiennent au compte, pas à la recette : sans
     // cette passe les créneaux les rendraient à leurs valeurs par défaut.
     const filled = plan.slots.filter(
       (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
@@ -250,10 +250,9 @@ export class PlanService {
 
   /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
   private baseScore(meal: MealView): number {
-    const favorite = meal.isFavorite ? 2 : 0;
     const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
     const freshness = this.freshnessScore(meal.lastCookedAt); // 0 … 2
-    return 1 + favorite + rating + freshness;
+    return 1 + rating + freshness;
   }
 
   /** Croît avec l'ancienneté. */

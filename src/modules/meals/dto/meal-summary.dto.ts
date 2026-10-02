@@ -22,9 +22,6 @@ export class MealSummaryDto {
   @ApiProperty({ type: Number, nullable: true, minimum: 1, maximum: 5 })
   rating!: number | null;
 
-  @ApiProperty()
-  isFavorite!: boolean;
-
   @ApiProperty({ type: String, format: 'date-time', nullable: true })
   lastCookedAt!: string | null;
 

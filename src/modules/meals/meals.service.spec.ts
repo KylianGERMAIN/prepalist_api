@@ -165,19 +165,16 @@ describe('MealsService', () => {
     expect(meals.save).not.toHaveBeenCalled();
   });
 
-  it('updateState forwards favorite and rating to the caller state', async () => {
+  it('updateState forwards the rating to the caller state', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
-    await service.updateState('u1', 'm1', { isFavorite: true, rating: 5 });
-    expect(state.patch).toHaveBeenCalledWith('u1', 'm1', {
-      isFavorite: true,
-      rating: 5,
-    });
+    await service.updateState('u1', 'm1', { rating: 5 });
+    expect(state.patch).toHaveBeenCalledWith('u1', 'm1', { rating: 5 });
   });
 
   it('updateState throws when the meal is missing', async () => {
     meals.findOne.mockResolvedValue(null);
     await expect(
-      service.updateState('u1', 'm1', { isFavorite: true }),
+      service.updateState('u1', 'm1', { rating: 4 }),
     ).rejects.toThrow(NotFoundException);
     expect(state.patch).not.toHaveBeenCalled();
   });
@@ -243,32 +240,9 @@ describe('MealsService', () => {
       page: 1,
       limit: 20,
       skip: 0,
-      favorite: true,
       name: 'x',
       tag: 't',
     } as never);
-    expect(qb.andWhere).toHaveBeenCalledTimes(3);
-  });
-
-  // L'absence de ligne d'état vaut « non favori » : sans le NOT EXISTS, le
-  // filtre ne rendrait que les repas déjà notés par le compte.
-  it('findAll turns favorite=false into a NOT EXISTS on the caller state', async () => {
-    const qb = {
-      andWhere: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
-    };
-    meals.createQueryBuilder.mockReturnValue(qb);
-    await service.findAll('u1', {
-      page: 1,
-      limit: 20,
-      skip: 0,
-      favorite: false,
-    } as never);
-    const [sql, params] = qb.andWhere.mock.calls[0];
-    expect(sql).toMatch(/^NOT EXISTS/);
-    expect(params).toEqual({ userId: 'u1' });
+    expect(qb.andWhere).toHaveBeenCalledTimes(2);
   });
 });
