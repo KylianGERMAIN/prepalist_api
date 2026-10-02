@@ -31,6 +31,15 @@ export class UpdateSlotDto {
   @ApiProperty({
     required: false,
     description:
+      'true vide le créneau et le marque « dehors » ; assigner un repas le retire. Incompatible avec un mealId non nul.',
+  })
+  @IsOptional()
+  @IsBoolean()
+  away?: boolean;
+
+  @ApiProperty({
+    required: false,
+    description:
       'Recopie le repas et les portions du créneau, une fois le patch appliqué, sur le suivant (midi → soir, soir → midi du lendemain), en l’écrasant. 400 après le dernier dîner, ou si le créneau est vide.',
   })
   @IsOptional()

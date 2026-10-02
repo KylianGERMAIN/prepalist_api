@@ -20,6 +20,9 @@ export class PlanSlotDto {
 
   @ApiProperty()
   servings!: number;
+
+  @ApiProperty()
+  away!: boolean;
 }
 
 export class PlanDto {
