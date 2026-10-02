@@ -52,7 +52,8 @@ export function computeDerived(slots: PlanSlot[]): DerivedLine[] {
 
 /**
  * Mute les items de `toUpdate` en place. Une coche survit sauf si la quantité
- * augmente ; un dérivé `dismissed` le reste sauf avec `restoreDismissed`.
+ * augmente ; un dérivé `dismissed` le reste sauf avec `restoreDismissed`, ou
+ * s'il avait été coché (acheté) et que sa quantité augmente.
  * Le nom n'est jamais réécrit : il a pu être édité à la main.
  */
 export function diffDerived(
@@ -77,6 +78,8 @@ export function diffDerived(
     let changed = false;
     if (item.quantity !== line.quantity) {
       if (item.checked && (item.quantity ?? 0) < line.quantity) {
+        // Déjà acheté, mais il en faut plus : même retiré de la liste, il revient.
+        item.dismissed = false;
         item.checked = false;
       }
       item.quantity = line.quantity;

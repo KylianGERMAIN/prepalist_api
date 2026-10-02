@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isEnum } from 'class-validator';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Unit } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
 import { PlanService } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
+import { ClearScope } from './dto/remove-shopping-list-items.dto';
 import { ShoppingListDto, ShoppingListItemDto } from './dto/shopping-list.dto';
 import { UpdateShoppingListItemDto } from './dto/update-shopping-list-item.dto';
 import { lockPlan, reconcileDerived } from './derived-items';
@@ -38,6 +39,49 @@ export class ShoppingListService {
     await this.items.manager.transaction(async (manager) => {
       await lockPlan(manager, plan.id);
       await reconcileDerived(manager, plan.id, { restoreDismissed: true });
+    });
+    return this.read(plan);
+  }
+
+  /** Les ids qui ne sont pas dans la liste de l'appelant sont ignorés, sans erreur. */
+  async removeItems(
+    userId: string,
+    itemIds: string[],
+  ): Promise<ShoppingListDto> {
+    return this.discard(userId, { id: In(itemIds) });
+  }
+
+  async clear(userId: string, scope: ClearScope): Promise<ShoppingListDto> {
+    return this.discard(
+      userId,
+      scope === ClearScope.CHECKED ? { checked: true } : {},
+    );
+  }
+
+  // Même règle que `removeItem` : un dérivé devient une tombstone, sinon la
+  // prochaine réconciliation le ramènerait ; un manuel est supprimé.
+  private async discard(
+    userId: string,
+    where: FindOptionsWhere<ShoppingListItem>,
+  ): Promise<ShoppingListDto> {
+    const plan = await this.plan.ensureForUser(userId);
+    await this.items.manager.transaction(async (manager) => {
+      await lockPlan(manager, plan.id);
+      await manager.update(
+        ShoppingListItem,
+        {
+          ...where,
+          planId: plan.id,
+          source: ShoppingItemSource.DERIVED,
+          dismissed: false,
+        },
+        { dismissed: true },
+      );
+      await manager.delete(ShoppingListItem, {
+        ...where,
+        planId: plan.id,
+        source: ShoppingItemSource.MANUAL,
+      });
     });
     return this.read(plan);
   }

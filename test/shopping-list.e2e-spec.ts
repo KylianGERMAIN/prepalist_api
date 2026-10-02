@@ -386,4 +386,123 @@ describe('Liste de courses (e2e)', () => {
       .expect(204);
     expect((await getList()).body.items).toEqual([]);
   });
+
+  const addManual = (name: string) =>
+    request(app.getHttpServer())
+      .post('/plan/shopping-list/items')
+      .set(...bearer(user))
+      .send({ name, quantity: 1, unit: 'pièce' })
+      .expect(201);
+
+  const removeMany = (who: TestUser, itemIds: string[]) =>
+    request(app.getHttpServer())
+      .post('/plan/shopping-list/items/delete')
+      .set(...bearer(who))
+      .send({ itemIds });
+
+  const clear = (scope?: string) =>
+    request(app.getHttpServer())
+      .delete('/plan/shopping-list/items')
+      .query(scope ? { scope } : {})
+      .set(...bearer(user));
+
+  it('supprime une sélection, dérivés en tombstone et manuels effacés', async () => {
+    const [basilic] = (await getList()).body.items;
+    const eponges = (await addManual('Éponges')).body;
+
+    const res = await removeMany(user, [basilic.id, eponges.id]).expect(200);
+
+    expect(res.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Tomate',
+    ]);
+    expect(res.body.dismissedCount).toBe(1);
+    const restored = await sync();
+    expect(restored.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Basilic',
+      'Tomate',
+    ]);
+  });
+
+  it('ignore en bloc les ids d’un autre compte', async () => {
+    const other = await registerUser(app);
+    const [basilic] = (await getList()).body.items;
+
+    const res = await removeMany(other, [basilic.id]).expect(200);
+
+    expect(res.body.items).toEqual([]);
+    expect((await getList()).body.items).toHaveLength(2);
+  });
+
+  it('retire mes ids et ignore ceux d’un autre compte dans une même requête', async () => {
+    const other = await registerUser(app);
+    const foreign = (
+      await request(app.getHttpServer())
+        .post('/plan/shopping-list/items')
+        .set(...bearer(other))
+        .send({ name: 'Lessive', quantity: 1, unit: 'pièce' })
+        .expect(201)
+    ).body;
+    const [basilic] = (await getList()).body.items;
+
+    await removeMany(user, [basilic.id, foreign.id]).expect(200);
+
+    expect(
+      (await getList()).body.items.map((i: { name: string }) => i.name),
+    ).toEqual(['Tomate']);
+    const theirs = await request(app.getHttpServer())
+      .get('/plan/shopping-list')
+      .set(...bearer(other))
+      .expect(200);
+    expect(theirs.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Lessive',
+    ]);
+  });
+
+  it('ramène un article acheté puis retiré quand le plan en demande plus', async () => {
+    const [basilic] = (await getList()).body.items;
+    await patchItem(basilic.id, { checked: true }).expect(200);
+    await clear('checked').expect(200);
+
+    await assign(0, { servings: 2 });
+
+    const [back] = (await getList()).body.items;
+    expect(back).toMatchObject({
+      name: 'Basilic',
+      quantity: 500,
+      checked: false,
+    });
+  });
+
+  it('valide le corps de la suppression multiple', async () => {
+    await removeMany(user, []).expect(400);
+    await removeMany(user, ['pas-un-uuid']).expect(400);
+  });
+
+  it('retire seulement les articles cochés', async () => {
+    const [basilic] = (await getList()).body.items;
+    const eponges = (await addManual('Éponges')).body;
+    await patchItem(basilic.id, { checked: true }).expect(200);
+    await patchItem(eponges.id, { checked: true }).expect(200);
+
+    const res = await clear('checked').expect(200);
+
+    expect(res.body.items.map((i: { name: string }) => i.name)).toEqual([
+      'Tomate',
+    ]);
+  });
+
+  it('vide toute la liste, qui le reste au GET et après une modification du plan', async () => {
+    await addManual('Éponges');
+
+    await clear('all').expect(200);
+    expect((await getList()).body.items).toEqual([]);
+
+    await assign(0, { servings: 3 });
+    expect((await getList()).body.items).toEqual([]);
+  });
+
+  it('exige un scope valide pour vider', async () => {
+    await clear().expect(400);
+    await clear('tout').expect(400);
+  });
 });
