@@ -11,9 +11,7 @@ export interface MealStateFields {
 
 export type MealView = Meal & MealStateFields;
 
-const NEVER_TOUCHED: MealStateFields = {
-  rating: null,
-};
+const NEVER_TOUCHED: MealStateFields = { rating: null };
 
 @Injectable()
 export class MealStateService {
@@ -49,14 +47,7 @@ export class MealStateService {
     });
     // Champ par champ, et non la ligne entière : `attachFor` la fusionne dans
     // le repas, où `userId` et `mealId` de l'état écraseraient ceux de la recette.
-    return new Map(
-      rows.map((r) => [
-        r.mealId,
-        {
-          rating: r.rating,
-        },
-      ]),
-    );
+    return new Map(rows.map((r) => [r.mealId, { rating: r.rating }]));
   }
 
   async patch(

@@ -218,7 +218,7 @@ describe('PlanService', () => {
       random.mockRestore();
     });
 
-    // 1 + 2 = 3 pour 5 étoiles, 1 + 0,4 = 1,4 pour 1 étoile.
+    // 3 + 2 = 5 pour 5 étoiles, 3 + 0,4 = 3,4 pour 1 étoile.
     it('pondère le tirage par la note', async () => {
       const pick = async (random: number) => {
         const target = slot('s1', 0, MealSlot.LUNCH);
@@ -227,14 +227,14 @@ describe('PlanService', () => {
           meal('top', { rating: 5 }),
           meal('low', { rating: 1 }),
         ]);
-        const spy = jest.spyOn(Math, 'random').mockReturnValue(random / 4.4);
+        const spy = jest.spyOn(Math, 'random').mockReturnValue(random / 8.4);
         await service.generate('u1');
         spy.mockRestore();
         return target.mealId;
       };
 
-      expect(await pick(2.9)).toBe('top');
-      expect(await pick(3.1)).toBe('low');
+      expect(await pick(4.9)).toBe('top');
+      expect(await pick(5.1)).toBe('low');
     });
 
     it('peut reprendre le dîner du jour J au déjeuner du jour J+1 (restes)', async () => {

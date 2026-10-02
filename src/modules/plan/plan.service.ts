@@ -246,8 +246,8 @@ export class PlanService {
     return meals[meals.length - 1].id;
   }
 
-  /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
+  /** Le `3 +` reprend la fraîcheur maximale qu'avaient tous les repas : les proportions du tirage ne bougent pas. */
   private baseScore(meal: MealView): number {
-    return 1 + ((meal.rating ?? 3) / 5) * 2; // 1.4 … 3
+    return 3 + ((meal.rating ?? 3) / 5) * 2; // 3.4 … 5
   }
 }

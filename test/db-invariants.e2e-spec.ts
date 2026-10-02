@@ -225,8 +225,8 @@ describe('Invariants de base (e2e)', () => {
       return rows[0].n as number;
     };
 
-    // PK (user_id, meal_id) : c'est elle que vise l'upsert de la note, sans
-    // quoi chaque note insérerait une ligne de plus.
+    // PK (user_id, meal_id) : c'est la cible du ON CONFLICT de l'upsert de la
+    // note, qui échouerait sans elle.
     it('interdit deux lignes d’état pour un même couple compte/repas', async () => {
       const [{ user_id: userId }] = await db.query(
         'SELECT user_id FROM user_meal_state LIMIT 1',
