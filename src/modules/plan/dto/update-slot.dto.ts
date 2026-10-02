@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsInt,
   IsOptional,
   IsUUID,
@@ -26,4 +27,13 @@ export class UpdateSlotDto {
   @Min(1)
   @Max(20)
   servings?: number;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Écrit aussi le repas et les portions sur le créneau suivant (midi → soir, soir → midi du lendemain), en l’écrasant',
+  })
+  @IsOptional()
+  @IsBoolean()
+  alsoNext?: boolean;
 }

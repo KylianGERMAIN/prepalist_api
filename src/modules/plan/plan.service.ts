@@ -18,6 +18,7 @@ import { UsersService } from '../users/users.service';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
 import { Plan } from './entities/plan.entity';
+import { nextSlotOf } from './next-slot';
 import { lastWeekdayOnOrBefore, today } from './plan-dates';
 
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
@@ -191,10 +192,29 @@ export class PlanService {
       return plan;
     }
 
+    let nextId: string | undefined;
+    if (dto.alsoNext) {
+      const position = nextSlotOf(slot, plan.dayCount);
+      nextId = plan.slots.find(
+        (s) => s.dayIndex === position?.dayIndex && s.slot === position?.slot,
+      )?.id;
+      if (!nextId) {
+        throw new BadRequestException(
+          'Aucun créneau après le dernier dîner du plan',
+        );
+      }
+    }
+
     await this.plans.manager.transaction(async (manager) => {
       await lockPlan(manager, plan.id);
       // update() écrit les colonnes directement (évite le conflit FK/relation).
       await manager.update(PlanSlot, slotId, patch);
+      if (nextId) {
+        await manager.update(PlanSlot, nextId, {
+          mealId: patch.mealId !== undefined ? patch.mealId : slot.mealId,
+          servings: patch.servings ?? slot.servings,
+        });
+      }
       await reconcileDerived(manager, plan.id);
     });
     return this.ensureForUser(userId);

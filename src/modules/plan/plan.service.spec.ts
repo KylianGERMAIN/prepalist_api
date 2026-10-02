@@ -286,6 +286,34 @@ describe('PlanService', () => {
       expect(reconcileDerived).toHaveBeenCalledWith(manager, 'p1');
     });
 
+    it('écrit aussi le créneau suivant dans la même transaction', async () => {
+      plans.findOne.mockResolvedValue(
+        planOf([
+          slot('s1', 0, MealSlot.LUNCH),
+          slot('s2', 0, MealSlot.DINNER, 'm-old'),
+        ]),
+      );
+      meals.findOne.mockResolvedValue({ id: 'm1' });
+
+      await service.updateSlot('u1', 's1', { mealId: 'm1', alsoNext: true });
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
+        mealId: 'm1',
+        servings: 1,
+      });
+    });
+
+    it('refuse alsoNext sur le dernier dîner sans ouvrir de transaction', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 6, MealSlot.DINNER)]));
+      meals.findOne.mockResolvedValue({ id: 'm1' });
+
+      await expect(
+        service.updateSlot('u1', 's1', { mealId: 'm1', alsoNext: true }),
+      ).rejects.toThrow(BadRequestException);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
     it('n’écrit rien pour un patch vide', async () => {
       plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
       await service.updateSlot('u1', 's1', {});
