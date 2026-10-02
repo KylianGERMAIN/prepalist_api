@@ -1,8 +1,13 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
+import { UpdateIngredientDto } from './dto/update-ingredient.dto';
 import { Ingredient } from './entities/ingredient.entity';
 
 @Injectable()
@@ -44,5 +49,15 @@ export class IngredientsService {
       }
       throw err;
     }
+  }
+
+  async update(id: string, dto: UpdateIngredientDto): Promise<Ingredient> {
+    const ingredient = await this.ingredients.findOne({ where: { id } });
+    if (!ingredient) {
+      throw new NotFoundException('Ingrédient introuvable');
+    }
+    if (dto.aisle !== undefined) ingredient.aisle = dto.aisle;
+    if (dto.defaultUnit !== undefined) ingredient.defaultUnit = dto.defaultUnit;
+    return this.ingredients.save(ingredient);
   }
 }

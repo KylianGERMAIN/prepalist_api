@@ -7,7 +7,10 @@ import {
   IsString,
   MaxLength,
   Min,
+  IsEnum,
+  ValidateIf,
 } from 'class-validator';
+import { Aisle } from '../../../common/aisle';
 
 export class UpdateShoppingListItemDto {
   @ApiProperty({ required: false })
@@ -32,4 +35,16 @@ export class UpdateShoppingListItemDto {
   @IsOptional()
   @IsString()
   unit?: string;
+
+  @ApiProperty({
+    required: false,
+    enum: Aisle,
+    nullable: true,
+    description:
+      'Rayon d’un article manuel. Ignoré pour un article issu des plats.',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsEnum(Aisle)
+  aisle?: Aisle | null;
 }

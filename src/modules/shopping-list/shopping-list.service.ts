@@ -9,6 +9,7 @@ import { isEnum } from 'class-validator';
 import { EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Unit } from '../../common/unit';
+import { aisleRank } from '../../common/aisle';
 import { PlanService, PlanView } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
 import { ClearScope } from './dto/remove-shopping-list-items.dto';
@@ -98,6 +99,7 @@ export class ShoppingListService {
       unit: dto.unit,
       quantity: dto.quantity ?? null,
       checked: false,
+      aisle: dto.aisle ?? null,
     });
     const saved = await this.items.save(item);
     return new ShoppingListItemDto(saved);
@@ -119,6 +121,13 @@ export class ShoppingListService {
       }
       if (dto.quantity !== undefined) {
         item.quantity = dto.quantity;
+      }
+      // Le rayon d'un dérivé est celui de son ingrédient (PATCH /ingredients/:id).
+      if (
+        dto.aisle !== undefined &&
+        item.source === ShoppingItemSource.MANUAL
+      ) {
+        item.aisle = dto.aisle;
       }
       if (dto.unit !== undefined && dto.unit !== item.unit) {
         // Comparé à l'unité actuelle : un article antérieur au jeu fermé doit
@@ -196,16 +205,24 @@ export class ShoppingListService {
 
   private async read(plan: PlanView): Promise<ShoppingListDto> {
     const [items, dismissedCount] = await Promise.all([
-      this.items.find({ where: { planId: plan.id, dismissed: false } }),
+      this.items.find({
+        where: { planId: plan.id, dismissed: false },
+        relations: { ingredient: true },
+      }),
       this.items.count({ where: { planId: plan.id, dismissed: true } }),
     ]);
-    items.sort((a, b) =>
-      a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
+    const dtos = items.map((item) => new ShoppingListItemDto(item));
+    // Parcours du magasin : rayon, puis à acheter avant acheté, puis nom.
+    dtos.sort(
+      (a, b) =>
+        aisleRank(a.aisle) - aisleRank(b.aisle) ||
+        Number(a.checked) - Number(b.checked) ||
+        a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
     );
     return new ShoppingListDto(
       plan.id,
       plan.startDate,
-      items.map((item) => new ShoppingListItemDto(item)),
+      dtos,
       dismissedCount,
       this.incompleteMeals(plan),
     );

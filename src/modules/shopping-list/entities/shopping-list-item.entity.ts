@@ -8,6 +8,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Aisle } from '../../../common/aisle';
 import { numericTransformer } from '../../../common/transformers/numeric.transformer';
 import { Ingredient } from '../../ingredients/entities/ingredient.entity';
 import { Plan } from '../../plan/entities/plan.entity';
@@ -73,6 +74,10 @@ export class ShoppingListItem {
   @ApiProperty()
   @Column({ type: 'boolean', default: false })
   checked!: boolean;
+
+  /** Rayon d'un article manuel ; un dérivé prend celui de son ingrédient, lu à chaque lecture. */
+  @Column({ type: 'enum', enum: Aisle, enumName: 'aisle_enum', nullable: true })
+  aisle!: Aisle | null;
 
   /** Dérivé supprimé à la main : masqué, et conservé pour que le recalcul ne le ressuscite pas. */
   @Column({ type: 'boolean', default: false })

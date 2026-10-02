@@ -241,7 +241,11 @@ describe('Liste de courses (e2e)', () => {
       name: string;
       checked: boolean;
     }[];
-    expect(after.map((i) => [i.name, i.checked])).toEqual([
+    expect(
+      after
+        .map((i) => [i.name, i.checked])
+        .sort((x, y) => String(x[0]).localeCompare(String(y[0]))),
+    ).toEqual([
       ['Basilic', true],
       ['Riz', false],
       ['Tomate', true],

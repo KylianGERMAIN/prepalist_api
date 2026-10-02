@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Aisle } from '../../../common/aisle';
 import { Unit } from '../../../common/unit';
 
 @Entity('ingredients')
@@ -22,4 +23,8 @@ export class Ingredient {
     nullable: true,
   })
   defaultUnit!: Unit | null;
+
+  @ApiProperty({ enum: Aisle, nullable: true })
+  @Column({ type: 'enum', enum: Aisle, enumName: 'aisle_enum', nullable: true })
+  aisle!: Aisle | null;
 }

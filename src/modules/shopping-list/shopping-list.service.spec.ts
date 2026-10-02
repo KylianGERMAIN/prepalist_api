@@ -101,6 +101,7 @@ describe('ShoppingListService', () => {
       const res = await service.forPlan('u1');
       expect(items.find).toHaveBeenCalledWith({
         where: { planId: 'p1', dismissed: false },
+        relations: { ingredient: true },
       });
       expect(items.count).toHaveBeenCalledWith({
         where: { planId: 'p1', dismissed: true },

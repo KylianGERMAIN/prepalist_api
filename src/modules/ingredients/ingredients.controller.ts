@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -10,6 +19,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { UserRole } from '../users/entities/user.entity';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
 import { IngredientQueryDto } from './dto/ingredient-query.dto';
+import { UpdateIngredientDto } from './dto/update-ingredient.dto';
 import { Ingredient } from './entities/ingredient.entity';
 import { IngredientsService } from './ingredients.service';
 
@@ -34,5 +44,19 @@ export class IngredientsController {
   @ApiCreatedResponse({ type: Ingredient })
   create(@Body() dto: CreateIngredientDto) {
     return this.ingredients.create(dto);
+  }
+
+  @Patch(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Corrige le rayon ou l’unité par défaut d’un ingrédient (admin uniquement)',
+  })
+  @ApiOkResponse({ type: Ingredient })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateIngredientDto,
+  ) {
+    return this.ingredients.update(id, dto);
   }
 }

@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Aisle } from '../../../common/aisle';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -26,6 +27,14 @@ export class ShoppingListItemDto {
   @ApiProperty()
   checked: boolean;
 
+  @ApiProperty({
+    enum: Aisle,
+    nullable: true,
+    description:
+      'Celui de l’ingrédient pour un article issu des plats ; null = « Autre ».',
+  })
+  aisle: Aisle | null;
+
   constructor(item: ShoppingListItem) {
     this.id = item.id;
     this.source = item.source;
@@ -34,6 +43,7 @@ export class ShoppingListItemDto {
     this.unit = item.unit;
     this.quantity = item.quantity;
     this.checked = item.checked;
+    this.aisle = item.aisle ?? item.ingredient?.aisle ?? null;
   }
 }
 
