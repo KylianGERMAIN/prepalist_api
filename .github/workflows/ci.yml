@@ -59,6 +59,8 @@ jobs:
       - run: pnpm test:e2e
 
       - name: Schema drift (entities vs migrations)
+        env:
+          DB_NAME: prepalist
         run: |
           pnpm migration:run
           pnpm migration:generate --check src/migrations/Check

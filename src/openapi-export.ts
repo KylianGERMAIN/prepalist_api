@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { configureApp } from './common/configure-app';
 import { buildOpenApiDocument } from './common/openapi';
 
 // `preview` lit les métadonnées sans instancier les providers : pas de connexion à la base.
@@ -8,8 +9,9 @@ import { buildOpenApiDocument } from './common/openapi';
 async function main() {
   const app = await NestFactory.create(AppModule, {
     preview: true,
-    logger: false,
+    logger: ['error'],
   });
+  configureApp(app);
   const document = buildOpenApiDocument(app, '2');
   writeFileSync('openapi.json', `${JSON.stringify(document, null, 2)}\n`);
   await app.close();
