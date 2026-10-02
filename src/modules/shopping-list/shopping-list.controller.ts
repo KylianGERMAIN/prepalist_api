@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -19,6 +20,10 @@ import {
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
+import {
+  ClearShoppingListQueryDto,
+  RemoveShoppingListItemsDto,
+} from './dto/remove-shopping-list-items.dto';
 import { ShoppingListDto, ShoppingListItemDto } from './dto/shopping-list.dto';
 import { UpdateShoppingListItemDto } from './dto/update-shopping-list-item.dto';
 import { ShoppingListService } from './shopping-list.service';
@@ -31,7 +36,8 @@ export class ShoppingListController {
 
   @Get()
   @ApiOperation({
-    summary: 'Liste de courses matérialisée du plan (init paresseuse)',
+    summary:
+      'Liste de courses du plan, tenue à jour à chaque écriture sur le plan',
   })
   @ApiOkResponse({ type: ShoppingListDto })
   forPlan(@CurrentUser('id') userId: string) {
@@ -40,7 +46,10 @@ export class ShoppingListController {
 
   @Post('sync')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Resynchronise les items dérivés depuis les plats' })
+  @ApiOperation({
+    summary:
+      'Recalcule les items dérivés et ramène ceux supprimés à la main (coches conservées)',
+  })
   @ApiOkResponse({ type: ShoppingListDto })
   sync(@CurrentUser('id') userId: string) {
     return this.shoppingList.sync(userId);
@@ -54,6 +63,30 @@ export class ShoppingListController {
     @Body() dto: CreateShoppingListItemDto,
   ) {
     return this.shoppingList.addItem(userId, dto);
+  }
+
+  @Post('items/delete')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'Supprime plusieurs items (POST : un body de DELETE est ignoré par certains proxies)',
+  })
+  @ApiOkResponse({ type: ShoppingListDto })
+  removeItems(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RemoveShoppingListItemsDto,
+  ) {
+    return this.shoppingList.removeItems(userId, dto.itemIds);
+  }
+
+  @Delete('items')
+  @ApiOperation({ summary: 'Vide la liste, ou seulement les items cochés' })
+  @ApiOkResponse({ type: ShoppingListDto })
+  clear(
+    @CurrentUser('id') userId: string,
+    @Query() query: ClearShoppingListQueryDto,
+  ) {
+    return this.shoppingList.clear(userId, query.scope);
   }
 
   @Patch('items/:itemId')

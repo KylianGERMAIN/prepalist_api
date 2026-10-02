@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common';
 import { QueryFailedError } from 'typeorm';
 import { Unit } from '../../common/unit';
+import { In } from 'typeorm';
 import { lockPlan, reconcileDerived } from './derived-items';
+import { ClearScope } from './dto/remove-shopping-list-items.dto';
 import { ShoppingListService } from './shopping-list.service';
 import { ShoppingItemSource } from './entities/shopping-list-item.entity';
 
@@ -139,6 +141,50 @@ describe('ShoppingListService', () => {
         .mocked(reconcileDerived)
         .mockRejectedValue(new Error('write failed'));
       await expect(service.sync('u1')).rejects.toThrow('write failed');
+    });
+  });
+
+  describe('removeItems / clear', () => {
+    const managerOf = () => manager as { update: jest.Mock; delete: jest.Mock };
+
+    it('tombstones the DERIVED and deletes the MANUAL among the given ids, under the lock', async () => {
+      managerOf().update = jest.fn();
+      await service.removeItems('u1', ['a', 'b']);
+      expect(lockPlan).toHaveBeenCalledWith(manager, 'p1');
+      expect(managerOf().update).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          id: In(['a', 'b']),
+          planId: 'p1',
+          source: ShoppingItemSource.DERIVED,
+          dismissed: false,
+        },
+        { dismissed: true },
+      );
+      expect(managerOf().delete).toHaveBeenCalledWith(expect.anything(), {
+        id: In(['a', 'b']),
+        planId: 'p1',
+        source: ShoppingItemSource.MANUAL,
+      });
+    });
+
+    it('narrows the clear to checked items', async () => {
+      managerOf().update = jest.fn();
+      await service.clear('u1', ClearScope.CHECKED);
+      expect(managerOf().delete).toHaveBeenCalledWith(expect.anything(), {
+        checked: true,
+        planId: 'p1',
+        source: ShoppingItemSource.MANUAL,
+      });
+    });
+
+    it('clears every item of the plan', async () => {
+      managerOf().update = jest.fn();
+      await service.clear('u1', ClearScope.ALL);
+      expect(managerOf().delete).toHaveBeenCalledWith(expect.anything(), {
+        planId: 'p1',
+        source: ShoppingItemSource.MANUAL,
+      });
     });
   });
 
