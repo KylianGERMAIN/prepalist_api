@@ -27,6 +27,29 @@ describe('MealsService', () => {
     patch: jest.Mock;
   };
 
+  // `findOne` passe par un query builder (pour `addSelect` de la description) :
+  // ce faux le ramène au mock `meals.findOne`, que les tests paramètrent.
+  interface DetailQb {
+    params: object;
+    addSelect: jest.Mock;
+    leftJoinAndSelect: jest.Mock;
+    where: jest.Mock;
+    getOne: jest.Mock;
+  }
+  const detailQb = (): DetailQb => {
+    const qb: DetailQb = {
+      params: {},
+      addSelect: jest.fn(() => qb),
+      leftJoinAndSelect: jest.fn(() => qb),
+      where: jest.fn((_: string, params: object) => {
+        qb.params = params;
+        return qb;
+      }),
+      getOne: jest.fn(() => meals.findOne({ where: qb.params }) as unknown),
+    };
+    return qb;
+  };
+
   beforeEach(() => {
     meals = {
       create: jest.fn((x: unknown) => x),
@@ -34,7 +57,7 @@ describe('MealsService', () => {
       findOne: jest.fn(),
       remove: jest.fn(() => Promise.resolve()),
       update: jest.fn(() => Promise.resolve()),
-      createQueryBuilder: jest.fn(),
+      createQueryBuilder: jest.fn(detailQb),
       manager: {
         transaction: jest.fn(async (cb: (m: unknown) => unknown) =>
           cb({
@@ -109,14 +132,18 @@ describe('MealsService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('findOne loads the ingredient lines and their ingredient', async () => {
+  it('findOne loads the ingredient lines, their ingredient and the description', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
+    const qb = detailQb();
+    meals.createQueryBuilder.mockReturnValue(qb);
     await service.findOne('m1');
-    expect(meals.findOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        relations: { ingredients: { ingredient: true } },
-      }),
+    expect(qb.addSelect).toHaveBeenCalledWith('meal.description');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('meal.ingredients', 'mi');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'mi.ingredient',
+      'ingredient',
     );
+    expect(qb.params).toEqual({ id: 'm1' });
   });
 
   it('findOne throws when the meal is missing', async () => {

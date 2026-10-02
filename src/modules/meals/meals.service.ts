@@ -43,6 +43,7 @@ export class MealsService {
       userId: null,
       status: MealStatus.PUBLISHED,
       tags: dto.tags ?? [],
+      description: dto.description ?? null,
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
     const saved = await this.meals.save(meal);
@@ -89,10 +90,13 @@ export class MealsService {
   async findOne(id: string): Promise<Meal> {
     // `ingredients` chargés : `update` les remplace en bloc, et sans la
     // collection en mémoire `orphanedRowAction` n'a aucun orphelin à supprimer.
-    const meal = await this.meals.findOne({
-      where: { id },
-      relations: { ingredients: { ingredient: true } },
-    });
+    const meal = await this.meals
+      .createQueryBuilder('meal')
+      .addSelect('meal.description')
+      .leftJoinAndSelect('meal.ingredients', 'mi')
+      .leftJoinAndSelect('mi.ingredient', 'ingredient')
+      .where('meal.id = :id', { id })
+      .getOne();
     if (!meal) {
       throw new NotFoundException('Repas introuvable');
     }
@@ -114,6 +118,7 @@ export class MealsService {
 
     if (dto.name !== undefined) meal.name = dto.name;
     if (dto.tags !== undefined) meal.tags = dto.tags;
+    if (dto.description !== undefined) meal.description = dto.description;
     if (dto.ingredients !== undefined) {
       meal.ingredients = await this.buildIngredients(dto.ingredients);
     }
