@@ -38,7 +38,8 @@ export class MealsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Liste paginée du catalogue de repas (filtres tag/name)',
+    summary:
+      'Liste paginée du catalogue de repas (filtres tag/name/incomplete)',
   })
   @ApiOkResponse({ type: PaginatedMealsDto })
   findAll(@CurrentUser('id') userId: string, @Query() query: MealQueryDto) {

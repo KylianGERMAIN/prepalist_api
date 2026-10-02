@@ -88,6 +88,32 @@ describe('Repas à compléter (e2e)', () => {
     expect((await list('?incomplete=true')).items).toEqual([]);
   });
 
+  it('porte le compte dans le détail et dans la réponse du PATCH', async () => {
+    const porc = await createMeal('Porc à la crème', false);
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/meals/${porc.id}`)
+      .set(...bearer(admin))
+      .send({
+        ingredients: [{ ingredientId: tomate, quantity: 1, unit: 'pièce' }],
+      })
+      .expect(200);
+    expect(patched.body.ingredientCount).toBe(1);
+
+    const detail = await request(app.getHttpServer())
+      .get(`/meals/${porc.id}`)
+      .set(...bearer(user))
+      .expect(200);
+    expect(detail.body.ingredientCount).toBe(1);
+  });
+
+  it('ne filtre rien avec incomplete=false', async () => {
+    await createMeal('Porc à la crème', false);
+    await createMeal('Salade', true);
+
+    expect((await list('?incomplete=false')).items).toHaveLength(2);
+  });
+
   it('pagine par repas malgré plusieurs ingrédients par repas', async () => {
     const oignon = (
       await request(app.getHttpServer())

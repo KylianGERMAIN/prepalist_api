@@ -25,6 +25,11 @@ const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
 const SLOT_RELATIONS = { slots: { meal: true } } as const;
 
+/** Plan rendu par `ensureForUser` : ses repas sont des vues (note, nombre d'ingrédients). */
+export type PlanView = Omit<Plan, 'slots'> & {
+  slots: (Omit<PlanSlot, 'meal'> & { meal?: MealView | null })[];
+};
+
 @Injectable()
 export class PlanService {
   constructor(
@@ -49,10 +54,10 @@ export class PlanService {
   }
 
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
-  async ensureForUser(userId: string): Promise<Plan> {
+  async ensureForUser(userId: string): Promise<PlanView> {
     const plan = await this.ensure(userId, SLOT_RELATIONS);
-    // La note appartient au compte, pas à la recette : sans cette passe les
-    // créneaux la rendraient à sa valeur par défaut.
+    // Note du compte et nombre d'ingrédients ne viennent pas de la relation :
+    // sans cette passe les créneaux les rendraient à leurs valeurs par défaut.
     const filled = plan.slots.filter(
       (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
     );
@@ -61,7 +66,7 @@ export class PlanService {
       filled.map((slot) => slot.meal),
     );
     filled.forEach((slot, index) => (slot.meal = attached[index]));
-    return plan;
+    return plan as PlanView;
   }
 
   private async ensure(

@@ -6,13 +6,13 @@ import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal } from './entities/meal.entity';
 import { UserMealState } from './entities/user-meal-state.entity';
 
-export interface MealStateFields {
+export interface MealViewFields {
   rating: number | null;
   /** 0 = repas « à compléter » : il ne nourrit pas la liste de courses. */
   ingredientCount: number;
 }
 
-export type MealView = Meal & MealStateFields;
+export type MealView = Meal & MealViewFields;
 
 const NEVER_RATED = { rating: null };
 
@@ -29,7 +29,7 @@ export class MealStateService {
   async attachFor<T extends Meal>(
     userId: string,
     meals: T[],
-  ): Promise<(T & MealStateFields)[]> {
+  ): Promise<(T & MealViewFields)[]> {
     const ids = meals.map((meal) => meal.id);
     const [states, counts] = await Promise.all([
       this.forUser(userId, ids),
