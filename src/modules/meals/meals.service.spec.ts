@@ -4,6 +4,7 @@ import { reconcilePlans } from '../shopping-list/derived-items';
 import { MealsService } from './meals.service';
 
 jest.mock('../shopping-list/derived-items', () => ({
+  lockPlan: jest.fn(),
   planIdsUsingMeal: jest.fn().mockResolvedValue(['p1']),
   reconcilePlans: jest.fn(),
 }));

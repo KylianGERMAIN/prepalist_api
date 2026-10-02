@@ -399,6 +399,51 @@ describe('PlanService', () => {
     });
   });
 
+  describe('moveSlot', () => {
+    it('404 si un des créneaux n’est pas dans le plan', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      await expect(service.moveSlot('u1', 's1', 'ailleurs')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.moveSlot('u1', 'ailleurs', 's1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('n’écrit rien vers le même créneau', async () => {
+      plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
+      await service.moveSlot('u1', 's1', 's1');
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('échange le contenu relu sous le verrou, sans réconcilier', async () => {
+      plans.findOne.mockResolvedValue(
+        planOf([slot('s1', 0, MealSlot.LUNCH), slot('s2', 0, MealSlot.DINNER)]),
+      );
+      manager.findOneByOrFail.mockImplementation(
+        (_: unknown, { id }: { id: string }) =>
+          id === 's1'
+            ? { id, mealId: 'm1', servings: 2, away: false }
+            : { id, mealId: null, servings: 1, away: true },
+      );
+
+      await service.moveSlot('u1', 's1', 's2');
+
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's1', {
+        mealId: null,
+        servings: 1,
+        away: true,
+      });
+      expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
+        mealId: 'm1',
+        servings: 2,
+        away: false,
+      });
+      expect(reconcileDerived).not.toHaveBeenCalled();
+    });
+  });
+
   describe('clearSlots', () => {
     it('vide les repas du plan', async () => {
       plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));

@@ -14,6 +14,7 @@ import { TagCountDto } from './dto/tag-count.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import {
+  lockPlan,
   planIdsUsingMeal,
   reconcilePlans,
 } from '../shopping-list/derived-items';
@@ -145,8 +146,13 @@ export class MealsService {
   async remove(id: string): Promise<void> {
     const meal = await this.findOne(id);
     await this.meals.manager.transaction(async (manager) => {
-      // Lus avant : la suppression passe `meal_id` à NULL sur les créneaux.
+      // Lus avant : la suppression passe `meal_id` à NULL sur les créneaux. Plans
+      // verrouillés avant ce SET NULL, dans l'ordre de toute autre écriture sur
+      // leurs créneaux : l'ordre inverse peut finir en deadlock.
       const planIds = await planIdsUsingMeal(manager, id);
+      for (const planId of planIds) {
+        await lockPlan(manager, planId);
+      }
       await manager.remove(meal);
       await reconcilePlans(manager, planIds);
     });
