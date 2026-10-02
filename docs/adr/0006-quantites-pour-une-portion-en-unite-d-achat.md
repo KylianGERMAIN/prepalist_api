@@ -1,7 +1,7 @@
 # 0006 — Quantités pour une portion, en unité d'achat
 
-- **Statut** : acceptée
-- **Source** : quantité × portions depuis le commit `0d6e214` feat(shopping-list): aggregate weekly shopping list (phase 3). Unité d'achat et jeu fermé : PR #43, commit `fc4fbfa` feat(units): close the unit set and rewrite derived items on sync (issue #19). Confirmé à la fermeture de l'issue #21 (fix(shopping-list): stop double-counting leftovers), close comme « not planned » le 2026-10-02. La convention « une portion » n'est écrite dans aucun commit : elle découle du calcul.
+- **Statut** : acceptée, 2026-10-02
+- **Source** : `0d6e214` feat(shopping-list): aggregate weekly shopping list (quantité × portions) et PR #43 `fc4fbfa` feat(units): close the unit set and rewrite derived items on sync (unité d'achat). Confirmée par l'issue #21, fermée en not planned le 2026-10-02 ; aucun commit n'écrit la règle « une portion », elle découle du calcul.
 
 ## Contexte
 
@@ -12,10 +12,10 @@ pour combien de personnes sont saisies les quantités, et dans quelle unité.
 
 - `meal_ingredients.quantity` est pour une portion. La liste multiplie par les
   portions du créneau : `mi.quantity * slot.servings`
-  (`src/modules/shopping-list/derived-items.ts:32`). `meals` n'a pas de colonne de
+  (`computeDerived`). `meals` n'a pas de colonne de
   portions.
 - L'unité est celle de l'achat, pas de la recette : `tranche` de jambon plutôt que
-  40 g (`src/common/unit.ts:1`). Le jeu est fermé, en enum Postgres `unit_enum`.
+  40 g (`Unit`, `src/common/unit.ts`). Le jeu est fermé, en enum Postgres `unit_enum`.
 - Les fractions sont permises (`0,5` oignon) : `quantity` est un `numeric`.
 
 ## Conséquences

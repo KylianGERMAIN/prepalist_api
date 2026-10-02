@@ -1,7 +1,7 @@
 # 0007 — `/health` en liveness, sans base
 
 - **Statut** : acceptée, 2026-07-29 (publiée en v0.3.1). Remplace la sonde base ajoutée par la PR #1.
-- **Source** : commit `afeed64` fix(health): drop the database probe from the health check, release `a89b326` chore(release): v0.3.1. Sonde d'origine : PR #1, commit `3788348` chore(api): v1 hardening.
+- **Source** : commit `afeed64` fix(health): drop the database probe from the health check, release `a89b326` chore(release): v0.3.1. Sonde d'origine : PR #1, commit `3788348` chore(api): v1 hardening, réécriture en anglais du commit `d822e91` de la PR, à arbre identique.
 
 ## Contexte
 
@@ -13,7 +13,7 @@ plus : le quota compute du tier Free a été épuisé, ce qui a bloqué les dép
 ## Décision
 
 `/health` est une liveness pure : ni `DataSource`, ni I/O. Elle renvoie `status`,
-`uptime`, `timestamp` et `version` (`src/modules/health/health.controller.ts:22-31`).
+`uptime`, `timestamp` et `version` (`HealthController.check`).
 
 ## Conséquences
 

@@ -23,7 +23,7 @@ flowchart LR
 
 - Le navigateur ne parle jamais à l'API : le front l'appelle depuis son serveur
   (Route Handlers, Server Components, Server Actions). D'où `CORS_ORIGINS` vide en
-  production, qui n'autorise aucune origine (`src/common/cors-origin.ts:16`,
+  production, qui n'autorise aucune origine (`resolveCorsOrigin`, `src/common/cors-origin.ts` ;
   `deploy/README.md`).
 - Le keep-alive empêche Render Free de mettre le service en veille. Il ping
   `/health`, qui ne touche pas la base (voir [ADR 0007](adr/0007-health-liveness-sans-db.md)).
@@ -51,14 +51,15 @@ flowchart LR
 ```
 
 - Les tokens vivent dans des cookies httpOnly posés par le front ; le serveur Next
-  relaie l'access token en `Authorization: Bearer` (`prepalist_front/src/lib/api.ts`).
+  relaie l'access token en `Authorization: Bearer` (`serverApi`, `prepalist_front/src/lib/api.ts`).
 - Au démarrage sur Render, `pnpm start:migrate` joue les migrations compilées puis
   lance `node dist/main` (`package.json`, script `start:migrate`).
 
 ## Modules Nest
 
-Enregistrés dans `src/app.module.ts:55-62`. Trois guards globaux, dans cet ordre :
-`ThrottlerGuard`, `JwtAuthGuard`, `RolesGuard` (`src/app.module.ts:69-74`). Toute
+`AppModule` (`src/app.module.ts`) enregistre 7 modules ; `TokenModule`, le huitième,
+n'est importé que par `AuthModule`. Trois guards globaux, dans cet ordre :
+`ThrottlerGuard`, `JwtAuthGuard`, `RolesGuard` (`providers` de `AppModule`). Toute
 route est authentifiée sauf celles marquées `@Public()`.
 
 | Module | Rôle | Routes |
@@ -85,6 +86,6 @@ flowchart TD
 
 Flèches pleines : imports de modules Nest. Pointillés : `plan.service.ts` et
 `meals.service.ts` importent les fonctions de `shopping-list/derived-items.ts`
-sans passer par l'injection (`src/modules/plan/plan.service.ts:12`,
-`src/modules/meals/meals.service.ts:16-20`). C'est ce qui permet de réconcilier la
+sans passer par l'injection (`lockPlan`, `reconcileDerived`, `planIdsUsingMeal`,
+`reconcilePlans`). C'est ce qui permet de réconcilier la
 liste dans la transaction qui modifie le plan ou une recette.

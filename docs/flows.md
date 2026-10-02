@@ -3,10 +3,10 @@
 ## Auth
 
 Access token 15 min, refresh token 7 jours, signés avec deux secrets distincts
-(`src/modules/token/token.service.ts:30-39`). Le refresh n'est pas stocké en base
+(`src/modules/token/token.service.ts`, `TokenService.issueTokens`). Le refresh n'est pas stocké en base
 ([ADR 0003](adr/0003-refresh-token-stateless.md)). Côté front, la durée de vie des
 cookies suit celle des JWT : le proxy considère qu'un cookie access présent est
-valide (`prepalist_front/src/lib/cookies.ts`).
+valide (`prepalist_front/src/lib/cookies.ts`, `ACCESS_MAX_AGE` et `REFRESH_MAX_AGE`).
 
 ### Login
 
@@ -22,8 +22,8 @@ sequenceDiagram
     F->>A: POST /auth/login
     Note over A: @Public, throttle 5 req/min
     A->>DB: SELECT users WHERE email = email normalisé
-    A->>A: bcrypt.compare(password, password_hash)
-    alt identifiants valides
+    A->>A: bcrypt.compare(password, password_hash), si le compte existe
+    alt compte trouvé et mot de passe correct
         A->>A: issueTokens, payload sub, email, role
         A-->>F: 200 accessToken + refreshToken
         F-->>U: cookies httpOnly pl_access (15 min) et pl_refresh (7 j)
@@ -49,17 +49,22 @@ sequenceDiagram
     U->>P: GET page protégée, sans pl_access
     P->>A: POST /auth/refresh (refreshToken)
     A->>A: verifyRefresh, signature et exp avec JWT_REFRESH_SECRET
-    alt token valide et compte existant
-        A->>DB: SELECT users WHERE id = sub
-        A-->>P: 200 nouvelle paire
-        P-->>U: page demandée, cookies réécrits
-    else signature invalide, expiré ou compte supprimé
+    alt signature invalide ou token expiré
         A-->>P: 401 Refresh token invalide ou expiré
         P-->>U: redirection /login
+    else token valide
+        A->>DB: SELECT users WHERE id = sub
+        alt compte existant
+            A-->>P: 200 nouvelle paire
+            P-->>U: page demandée, cookies réécrits
+        else compte supprimé
+            A-->>P: 401 Refresh token invalide ou expiré
+            P-->>U: redirection /login
+        end
     end
 ```
 
-Le compte est relu à chaque refresh (`src/modules/auth/auth.service.ts:40-45`) :
+Le compte est relu à chaque refresh (`src/modules/auth/auth.service.ts`, `AuthService.refresh`) :
 le rôle porté par le nouveau JWT est celui de la base, d'où la promotion
 `ADMIN_EMAILS` visible au refresh suivant.
 
@@ -84,18 +89,23 @@ sequenceDiagram
 ```
 
 L'API ne relit pas le compte sur une requête authentifiée : `JwtStrategy.validate`
-recopie le payload (`src/modules/auth/strategies/jwt.strategy.ts:19-21`). Un compte
+recopie le payload (`src/modules/auth/strategies/jwt.strategy.ts`). Un compte
 supprimé passe donc le guard tant que son access token n'a pas expiré.
 
 ## Plan vers liste de courses
 
 Les items `DERIVED` sont recalculés depuis les créneaux dans la transaction qui
 modifie le plan, sous un verrou `SELECT ... FOR UPDATE` sur la ligne `plans`
-(`lockPlan`, `src/modules/shopping-list/derived-items.ts:102-111`). Écrivent sous
-ce verrou : `generate`, `updateSlot`, `moveSlot`, `clearSlots`
-(`src/modules/plan/plan.service.ts`), la modification et la suppression d'une
-recette (`src/modules/meals/meals.service.ts:135-158`), et toute écriture sur un
-item de la liste.
+(`lockPlan`, `src/modules/shopping-list/derived-items.ts`). Écrivent sous ce
+verrou : `PlanService.generate`, `updateSlot`, `moveSlot` et `clearSlots`
+(`src/modules/plan/plan.service.ts`), ainsi que toute écriture sur un item de la
+liste. Côté recettes (`src/modules/meals/meals.service.ts`) :
+
+- `MealsService.update` fait `save(meal)` avant de prendre le moindre verrou ; seule
+  la réconciliation des plans concernés (`reconcilePlans`) passe sous verrou, plan
+  par plan ;
+- `MealsService.remove` verrouille d'abord tous les plans qui utilisent le repas,
+  puis supprime et réconcilie.
 
 ### Réconciliation après une écriture sur le plan
 
@@ -124,17 +134,16 @@ sequenceDiagram
     PS-->>F: 200 plan
 ```
 
-Règles de `diffDerived` (`src/modules/shopping-list/derived-items.ts:59-99`) :
+Règles de `diffDerived` (`src/modules/shopping-list/derived-items.ts`) :
 
 - une coche survit, sauf si la quantité augmente sur un item coché : il est alors
   décoché et, s'il était `dismissed`, il revient dans la liste ;
 - le nom n'est jamais réécrit, il a pu être édité à la main ;
 - les items `MANUAL` ne sont jamais lus ni touchés.
 
-`moveSlot` prend le verrou mais ne réconcilie pas : mêmes repas, mêmes portions
-(`src/modules/plan/plan.service.ts:290-291`). `clearSlots` supprime tous les
-`DERIVED`, tombstones comprises, et garde les `MANUAL`
-(`src/modules/plan/plan.service.ts:306-318`).
+`PlanService.moveSlot` prend le verrou mais ne réconcilie pas : mêmes repas, mêmes
+portions. `PlanService.clearSlots` supprime tous les `DERIVED`, tombstones
+comprises, et garde les `MANUAL`.
 
 ### Suppression d'un item, tombstone et /sync
 
@@ -169,9 +178,9 @@ sequenceDiagram
 
 La lecture (`GET /plan/shopping-list`) filtre `dismissed = false` et renvoie
 `dismissedCount`, ce qui permet au front de proposer le `/sync`
-(`src/modules/shopping-list/shopping-list.service.ts:210-233`). La suppression
-multiple et le vidage suivent la même règle : tombstone pour un `DERIVED`, suppression
-pour un `MANUAL` (`src/modules/shopping-list/shopping-list.service.ts:61-87`).
+(`ShoppingListService.read`). La suppression multiple et le vidage suivent la même
+règle : tombstone pour un `DERIVED`, suppression pour un `MANUAL`
+(`ShoppingListService.discard`).
 
 ## Déploiement
 
@@ -200,9 +209,7 @@ sequenceDiagram
 ```
 
 - L'auto-deploy natif de Render est désactivé : seul un tag déploie
-  (`.github/workflows/deploy.yml:3-6`).
+  (`.github/workflows/deploy.yml`, déclencheur `on.push.tags`).
 - Le champ Docker Command de Render ne passe pas par un shell, d'où le script
   `start:migrate` qui porte le `&&` (`deploy/README.md`, section Render).
-- Le commentaire de `deploy.yml` parle encore d'une Pre-Deploy Command : elle est
-  payante et vide sur le tier Free, les migrations passent par `start:migrate`.
 - Le front suit le même schéma avec un Deploy Hook Vercel, dans son propre dépôt.

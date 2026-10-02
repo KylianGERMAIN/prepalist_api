@@ -60,6 +60,8 @@ src/
 - Une PR qui change le schéma ou un flux met à jour le doc correspondant
   (`docs/data-model.md`, `docs/flows.md`). Une décision qui en remplace une autre
   ajoute une ADR et marque l'ancienne `Superseded`, sans la réécrire.
+- Dans `docs/`, le code applicatif se cite par fichier + symbole ; `fichier:ligne`
+  est réservé aux migrations, immuables une fois mergées.
 - Tout changement de contrôleur ou de DTO = `pnpm openapi:export` et `openapi.json`
   commité dans le même PR : la CI échoue sur un contrat périmé, et le front en tire ses types.
 - **Enum partagé (`unit_enum`, `aisle_enum`)** : ajouter une valeur se fait par une migration

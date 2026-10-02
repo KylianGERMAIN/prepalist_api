@@ -1,7 +1,7 @@
 # 0003 — Refresh token stateless
 
 - **Statut** : acceptée, 2026-06-30
-- **Source** : commit `283ceca` feat(api): bootstrap phase 0 socle (`TokenService`, section « Écarts assumés » de `CLAUDE.md`). Complétée par `82e7f61` fix(api): address phase-0 review findings (401 et non 404 quand le compte a disparu) et par la PR #1, commit `3788348` chore(api): v1 hardening (throttle 5/min sur `/auth/refresh`).
+- **Source** : commit `283ceca` feat(api): bootstrap phase 0 socle (`TokenService`, section « Écarts assumés » de `CLAUDE.md`). Complétée par `82e7f61` fix(api): address phase-0 review findings (401 et non 404 quand le compte a disparu) et par la PR #1, commit `3788348` chore(api): v1 hardening (throttle 5/min sur `/auth/refresh`), réécriture en anglais du commit `d822e91` de la PR, à arbre identique.
 
 ## Contexte
 
@@ -15,7 +15,7 @@ dans `CLAUDE.md` qu'elle serait à faire évoluer si le besoin de sécurité aug
 Le refresh token est un JWT signé avec `JWT_REFRESH_SECRET`, distinct du secret
 d'access, valable 7 jours par défaut. Il n'est pas stocké : `POST /auth/refresh`
 vérifie sa signature et son expiration, relit le compte, puis émet une nouvelle
-paire (`src/modules/auth/auth.service.ts:32-47`).
+paire (`AuthService.refresh`).
 
 ## Conséquences
 
