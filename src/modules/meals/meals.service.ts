@@ -12,6 +12,10 @@ import { MealIngredientDto } from './dto/meal-ingredient.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
+import {
+  planIdsUsingMeal,
+  reconcilePlans,
+} from '../shopping-list/derived-items';
 import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal, MealStatus } from './entities/meal.entity';
 import { MealStateService, MealView } from './meal-state.service';
@@ -114,7 +118,12 @@ export class MealsService {
       meal.ingredients = await this.buildIngredients(dto.ingredients);
     }
 
-    await this.meals.save(meal);
+    await this.meals.manager.transaction(async (manager) => {
+      await manager.save(meal);
+      if (dto.ingredients !== undefined) {
+        await reconcilePlans(manager, await planIdsUsingMeal(manager, id));
+      }
+    });
     await this.adoptDefaultUnits(dto.ingredients ?? []);
     // Même raison que dans `create` : la réponse doit avoir la forme du GET.
     return this.findOneFor(userId, id);
@@ -122,7 +131,12 @@ export class MealsService {
 
   async remove(id: string): Promise<void> {
     const meal = await this.findOne(id);
-    await this.meals.remove(meal);
+    await this.meals.manager.transaction(async (manager) => {
+      // Lus avant : la suppression passe `meal_id` à NULL sur les créneaux.
+      const planIds = await planIdsUsingMeal(manager, id);
+      await manager.remove(meal);
+      await reconcilePlans(manager, planIds);
+    });
   }
 
   async markCooked(userId: string, id: string): Promise<MealView> {

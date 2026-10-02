@@ -59,7 +59,18 @@ describe('ShoppingListService', () => {
     jest.mocked(lockPlan).mockClear();
     jest.mocked(reconcileDerived).mockReset();
     planService = { ensureForUser: jest.fn().mockResolvedValue(plan()) };
-    manager = {};
+    // Délègue aux mocks du repository : les assertions restent sur `items`.
+    manager = {
+      findOne: jest.fn((_: unknown, options: unknown) =>
+        items.findOne(options),
+      ),
+      save: jest.fn((x: unknown) => items.save(x)),
+      update: jest.fn((_: unknown, id: unknown, patch: unknown) =>
+        items.update(id, patch),
+      ),
+      remove: jest.fn((x: unknown) => items.remove(x)),
+      delete: jest.fn(),
+    };
     items = {
       count: jest.fn().mockResolvedValue(0),
       find: jest.fn().mockResolvedValue([]),

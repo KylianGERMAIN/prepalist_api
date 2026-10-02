@@ -314,4 +314,76 @@ describe('Liste de courses (e2e)', () => {
       ['Tomate', 450],
     ]);
   });
+  it('change l’unité vers la clé d’un dérivé supprimé sans 409', async () => {
+    const [basilic, tomate] = (await getList()).body.items;
+    const res = await request(app.getHttpServer())
+      .post('/meals')
+      .set(...bearer(admin))
+      .send({
+        name: 'Salade',
+        ingredients: [
+          { ingredientId: tomate.ingredientId, quantity: 2, unit: 'pièce' },
+        ],
+      })
+      .expect(201);
+    await assign(1, { mealId: res.body.id });
+    const tomatePiece = (await getList()).body.items.find(
+      (i: { unit: string }) => i.unit === 'pièce',
+    );
+    await request(app.getHttpServer())
+      .delete(`/plan/shopping-list/items/${tomate.id}`)
+      .set(...bearer(user))
+      .expect(204);
+
+    await patchItem(tomatePiece.id, { unit: 'g' }).expect(200);
+
+    const after = await getList();
+    expect(after.body.dismissedCount).toBe(0);
+    expect(after.body.items.map((i: { id: string }) => i.id)).toEqual([
+      basilic.id,
+      tomatePiece.id,
+    ]);
+  });
+
+  it('garde un nom édité à la main quand le plan change', async () => {
+    const [basilic] = (await getList()).body.items;
+    await patchItem(basilic.id, { name: 'Basilic frais' }).expect(200);
+
+    await assign(0, { servings: 2 });
+
+    const names = (await getList()).body.items.map(
+      (i: { name: string }) => i.name,
+    );
+    expect(names).toContain('Basilic frais');
+  });
+
+  it('suit les ingrédients d’une recette planifiée modifiée, puis supprimée', async () => {
+    const mealId = (
+      await request(app.getHttpServer())
+        .get('/plan')
+        .set(...bearer(user))
+        .expect(200)
+    ).body.slots[0].mealId as string;
+
+    await request(app.getHttpServer())
+      .patch(`/meals/${mealId}`)
+      .set(...bearer(admin))
+      .send({
+        ingredients: [
+          { ingredientId: ingredientIds[0], quantity: 400, unit: 'g' },
+        ],
+      })
+      .expect(200);
+    const edited = (await getList()).body.items as {
+      name: string;
+      quantity: number;
+    }[];
+    expect(edited.map((i) => [i.name, i.quantity])).toEqual([['Tomate', 400]]);
+
+    await request(app.getHttpServer())
+      .delete(`/meals/${mealId}`)
+      .set(...bearer(admin))
+      .expect(204);
+    expect((await getList()).body.items).toEqual([]);
+  });
 });

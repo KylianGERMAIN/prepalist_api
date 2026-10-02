@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { isEnum } from 'class-validator';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Unit } from '../../common/unit';
 import { Plan } from '../plan/entities/plan.entity';
@@ -65,56 +65,84 @@ export class ShoppingListService {
     itemId: string,
     dto: UpdateShoppingListItemDto,
   ): Promise<ShoppingListItemDto> {
-    const item = await this.findItem(userId, itemId);
+    return this.items.manager.transaction(async (manager) => {
+      const item = await this.findLocked(manager, userId, itemId);
 
-    if (dto.checked !== undefined) {
-      item.checked = dto.checked;
-    }
-    if (dto.name !== undefined) {
-      item.name = dto.name;
-    }
-    if (dto.quantity !== undefined) {
-      item.quantity = dto.quantity;
-    }
-    if (dto.unit !== undefined) {
-      // Comparé à l'unité actuelle : un article antérieur au jeu fermé doit
-      // rester éditable tant qu'on ne touche pas à son unité.
-      if (dto.unit !== item.unit && !isEnum(dto.unit, Unit)) {
-        throw new BadRequestException(
-          `Unité invalide : ${Object.values(Unit).join(', ')}`,
+      if (dto.checked !== undefined) {
+        item.checked = dto.checked;
+      }
+      if (dto.name !== undefined) {
+        item.name = dto.name;
+      }
+      if (dto.quantity !== undefined) {
+        item.quantity = dto.quantity;
+      }
+      if (dto.unit !== undefined && dto.unit !== item.unit) {
+        // Comparé à l'unité actuelle : un article antérieur au jeu fermé doit
+        // rester éditable tant qu'on ne touche pas à son unité.
+        if (!isEnum(dto.unit, Unit)) {
+          throw new BadRequestException(
+            `Unité invalide : ${Object.values(Unit).join(', ')}`,
+          );
+        }
+        if (item.source === ShoppingItemSource.DERIVED) {
+          // Une tombstone occupe sa clé dans l'index unique : invisible, elle
+          // ferait refuser le changement d'unité avec un 409 incompréhensible.
+          await manager.delete(ShoppingListItem, {
+            planId: item.planId,
+            source: ShoppingItemSource.DERIVED,
+            ingredientId: item.ingredientId,
+            unit: dto.unit,
+            dismissed: true,
+          });
+        }
+        item.unit = dto.unit;
+      }
+
+      try {
+        return new ShoppingListItemDto(await manager.save(item));
+      } catch (err) {
+        if (!isUniqueViolation(err)) {
+          throw err;
+        }
+        throw new ConflictException(
+          `« ${item.name} » est déjà dans la liste avec l'unité ${item.unit}`,
         );
       }
-      item.unit = dto.unit;
-    }
-
-    try {
-      return new ShoppingListItemDto(await this.items.save(item));
-    } catch (err) {
-      if (!isUniqueViolation(err)) {
-        throw err;
-      }
-      throw new ConflictException(
-        `« ${item.name} » est déjà dans la liste avec l'unité ${item.unit}`,
-      );
-    }
+    });
   }
 
   async removeItem(userId: string, itemId: string): Promise<void> {
-    const item = await this.findItem(userId, itemId);
-    if (item.source === ShoppingItemSource.DERIVED) {
-      await this.items.update(item.id, { dismissed: true });
-    } else {
-      await this.items.remove(item);
-    }
+    await this.items.manager.transaction(async (manager) => {
+      const item = await this.findLocked(manager, userId, itemId);
+      if (item.source === ShoppingItemSource.DERIVED) {
+        await manager.update(ShoppingListItem, item.id, { dismissed: true });
+      } else {
+        await manager.remove(item);
+      }
+    });
+  }
+
+  // Relu sous le verrou du plan : lu avant, l'item serait réécrit par-dessus une
+  // réconciliation concurrente (coche ou quantité perdue).
+  private async findLocked(
+    manager: EntityManager,
+    userId: string,
+    itemId: string,
+  ): Promise<ShoppingListItem> {
+    const { planId } = await this.findItem(manager, userId, itemId);
+    await lockPlan(manager, planId);
+    return this.findItem(manager, userId, itemId);
   }
 
   // C'est la clause `plan: { userId }` qui porte l'ownership : la retirer ouvre
   // l'accès aux items de n'importe quel utilisateur.
   private async findItem(
+    manager: EntityManager,
     userId: string,
     itemId: string,
   ): Promise<ShoppingListItem> {
-    const item = await this.items.findOne({
+    const item = await manager.findOne(ShoppingListItem, {
       where: { id: itemId, dismissed: false, plan: { userId } },
     });
     if (!item) {

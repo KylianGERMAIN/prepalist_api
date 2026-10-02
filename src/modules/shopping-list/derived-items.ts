@@ -53,6 +53,7 @@ export function computeDerived(slots: PlanSlot[]): DerivedLine[] {
 /**
  * Mute les items de `toUpdate` en place. Une coche survit sauf si la quantité
  * augmente ; un dérivé `dismissed` le reste sauf avec `restoreDismissed`.
+ * Le nom n'est jamais réécrit : il a pu être édité à la main.
  */
 export function diffDerived(
   existing: ShoppingListItem[],
@@ -79,10 +80,6 @@ export function diffDerived(
         item.checked = false;
       }
       item.quantity = line.quantity;
-      changed = true;
-    }
-    if (item.name !== line.name) {
-      item.name = line.name;
       changed = true;
     }
     if (restoreDismissed && item.dismissed) {
@@ -143,5 +140,30 @@ export async function reconcileDerived(
         }),
       ),
     );
+  }
+}
+
+/** Plans dont un créneau porte ce repas, triés : l'ordre des verrous évite les deadlocks. */
+export async function planIdsUsingMeal(
+  manager: EntityManager,
+  mealId: string,
+): Promise<string[]> {
+  const rows = await manager
+    .createQueryBuilder(PlanSlot, 'slot')
+    .select('DISTINCT slot.plan_id', 'planId')
+    .where('slot.meal_id = :mealId', { mealId })
+    .orderBy('slot.plan_id')
+    .getRawMany<{ planId: string }>();
+  return rows.map((row) => row.planId);
+}
+
+/** `planIds` triés, comme les rend `planIdsUsingMeal`. */
+export async function reconcilePlans(
+  manager: EntityManager,
+  planIds: string[],
+): Promise<void> {
+  for (const planId of planIds) {
+    await lockPlan(manager, planId);
+    await reconcileDerived(manager, planId);
   }
 }

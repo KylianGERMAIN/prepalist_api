@@ -49,7 +49,7 @@ export class ShoppingListDto {
 
   @ApiProperty({
     description:
-      'Articles issus des plats supprimés à la main, que la synchro ramènerait',
+      'Articles issus des plats que l’utilisateur a supprimés de la liste ; la synchro les ramène',
   })
   dismissedCount: number;
 
