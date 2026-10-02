@@ -22,7 +22,8 @@ const slot = (
   dayIndex: number,
   s: MealSlot,
   mealId: string | null = null,
-) => ({ id, dayIndex, slot: s, mealId, servings: 1 });
+  away = false,
+) => ({ id, dayIndex, slot: s, mealId, servings: 1, away });
 
 const planOf = (slots: unknown[]) => ({
   id: 'p1',
@@ -179,6 +180,19 @@ describe('PlanService', () => {
       expect(assigned.mealId).toBe('m-fixed');
     });
 
+    it('ne remplit pas un créneau marqué dehors', async () => {
+      const away = slot('s1', 0, MealSlot.LUNCH, null, true);
+      const empty = slot('s2', 0, MealSlot.DINNER);
+      plans.findOne.mockResolvedValue(planOf([away, empty]));
+      meals.find.mockResolvedValue([meal('m1')]);
+
+      await service.generate('u1');
+
+      expect(away.mealId).toBeNull();
+      const saved = manager.save.mock.calls[0][1] as { id: string }[];
+      expect(saved.map((s) => s.id)).toEqual(['s2']);
+    });
+
     it('n’écrit que les colonnes id et mealId des créneaux modifiés', async () => {
       plans.findOne.mockResolvedValue(planOf([slot('s1', 0, MealSlot.LUNCH)]));
       meals.find.mockResolvedValue([meal('m1')]);
@@ -247,6 +261,20 @@ describe('PlanService', () => {
       expect(await pick(5.1)).toBe('low');
     });
 
+    it('ne prend pas un dîner dehors pour des restes', async () => {
+      const dinner = slot('s1', 0, MealSlot.DINNER, null, true);
+      const nextLunch = slot('s2', 1, MealSlot.LUNCH);
+      plans.findOne.mockResolvedValue(planOf([dinner, nextLunch]));
+      meals.find.mockResolvedValue([meal('m1')]);
+      const random = jest.spyOn(Math, 'random').mockReturnValue(0);
+
+      await service.generate('u1');
+
+      expect(dinner.mealId).toBeNull();
+      expect(nextLunch.mealId).toBe('m1');
+      random.mockRestore();
+    });
+
     it('peut reprendre le dîner du jour J au déjeuner du jour J+1 (restes)', async () => {
       const dinner = slot('s1', 0, MealSlot.DINNER, 'm-dinner');
       const nextLunch = slot('s2', 1, MealSlot.LUNCH);
@@ -286,6 +314,7 @@ describe('PlanService', () => {
       expect(meals.findOne).not.toHaveBeenCalled();
       expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's1', {
         mealId: null,
+        away: false,
       });
     });
 
@@ -312,6 +341,7 @@ describe('PlanService', () => {
       expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
         mealId: 'm1',
         servings: 1,
+        away: false,
       });
     });
 
@@ -332,6 +362,7 @@ describe('PlanService', () => {
       expect(manager.update).toHaveBeenCalledWith(PlanSlot, 's2', {
         mealId: 'm-now',
         servings: 4,
+        away: false,
       });
     });
 
@@ -375,7 +406,7 @@ describe('PlanService', () => {
       expect(manager.update).toHaveBeenCalledWith(
         PlanSlot,
         { planId: 'p1' },
-        { mealId: null },
+        { mealId: null, away: false },
       );
     });
 

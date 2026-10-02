@@ -125,6 +125,9 @@ export class PlanService {
     const changed: PlanSlot[] = [];
 
     for (const slot of ordered) {
+      if (slot.away) {
+        continue;
+      }
       if (slot.mealId) {
         placed.set(slot.mealId, (placed.get(slot.mealId) ?? 0) + 1);
         if (slot.slot === MealSlot.DINNER) {
@@ -180,8 +183,20 @@ export class PlanService {
       throw new NotFoundException('Créneau introuvable');
     }
 
+    if (dto.away && dto.mealId) {
+      throw new BadRequestException(
+        'Un créneau « dehors » ne porte pas de repas',
+      );
+    }
+
     const patch: DeepPartial<PlanSlot> = {};
-    if (dto.mealId !== undefined) {
+    if (dto.away !== undefined) {
+      patch.away = dto.away;
+      if (dto.away) {
+        patch.mealId = null;
+      }
+    }
+    if (dto.mealId !== undefined && !dto.away) {
       if (dto.mealId !== null) {
         const meal = await this.meals.findOne({ where: { id: dto.mealId } });
         if (!meal) {
@@ -189,6 +204,8 @@ export class PlanService {
         }
       }
       patch.mealId = dto.mealId;
+      // Vider un créneau le remet à « non décidé », « dehors » compris.
+      patch.away = false;
     }
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;
@@ -218,15 +235,20 @@ export class PlanService {
       }
       if (nextId) {
         // Relu sous le verrou : lu avant, il pourrait recopier un repas déjà remplacé.
-        const { mealId, servings } = await manager.findOneByOrFail(PlanSlot, {
-          id: slotId,
-        });
-        if (!mealId) {
+        const { mealId, servings, away } = await manager.findOneByOrFail(
+          PlanSlot,
+          { id: slotId },
+        );
+        if (!mealId && !away) {
           throw new BadRequestException(
             'Rien à reporter : le créneau est vide',
           );
         }
-        await manager.update(PlanSlot, nextId, { mealId, servings });
+        await manager.update(
+          PlanSlot,
+          nextId,
+          away ? { away, mealId: null } : { mealId, servings, away: false },
+        );
       }
       await reconcileDerived(manager, plan.id);
     });
@@ -245,7 +267,11 @@ export class PlanService {
     // ingrédients d'un plan disparu.
     await this.plans.manager.transaction(async (manager) => {
       await lockPlan(manager, plan.id);
-      await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
+      await manager.update(
+        PlanSlot,
+        { planId: plan.id },
+        { mealId: null, away: false },
+      );
       await manager.delete(ShoppingListItem, {
         planId: plan.id,
         source: ShoppingItemSource.DERIVED,
