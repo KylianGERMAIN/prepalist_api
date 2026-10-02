@@ -1,0 +1,1929 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "status": "ok",
+                    "uptime": 1234.56,
+                    "timestamp": "2026-07-03T06:38:37.524Z",
+                    "version": "0.2.1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "Liveness check (process uniquement)",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/users/me": {
+      "get": {
+        "operationId": "UsersController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Profil de l’utilisateur courant",
+        "tags": [
+          "users"
+        ]
+      },
+      "patch": {
+        "operationId": "UsersController_updateMe",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Met à jour les préférences (jour de courses)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "AuthController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPairDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Crée un compte et renvoie une paire de tokens",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPairDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authentifie un utilisateur",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPairDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Renouvelle la paire de tokens",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/ingredients": {
+      "get": {
+        "operationId": "IngredientsController_search",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Filtre par nom (ILike)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ingredient"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recherche dans le catalogue d’ingrédients",
+        "tags": [
+          "ingredients"
+        ]
+      },
+      "post": {
+        "operationId": "IngredientsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIngredientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingredient"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ajoute un ingrédient au catalogue (admin uniquement)",
+        "tags": [
+          "ingredients"
+        ]
+      }
+    },
+    "/ingredients/{id}": {
+      "patch": {
+        "operationId": "IngredientsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateIngredientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ingredient"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Corrige le rayon ou l’unité par défaut d’un ingrédient (admin uniquement)",
+        "tags": [
+          "ingredients"
+        ]
+      }
+    },
+    "/meals": {
+      "get": {
+        "operationId": "MealsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "incomplete",
+            "required": false,
+            "in": "query",
+            "description": "true = repas sans ingrédient",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "description": "Filtre par tag, normalisé comme à l’écriture",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "name",
+            "required": false,
+            "in": "query",
+            "description": "Filtre par nom (ILike)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedMealsDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liste paginée du catalogue de repas (filtres tag/name/incomplete)",
+        "tags": [
+          "meals"
+        ]
+      },
+      "post": {
+        "operationId": "MealsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMealDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crée un repas (admin uniquement)",
+        "tags": [
+          "meals"
+        ]
+      }
+    },
+    "/meals/tags": {
+      "get": {
+        "operationId": "MealsController_tags",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagCountDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tags existants, les plus utilisés en tête",
+        "tags": [
+          "meals"
+        ]
+      }
+    },
+    "/meals/{id}": {
+      "get": {
+        "operationId": "MealsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Détail d’un repas (avec ingrédients)",
+        "tags": [
+          "meals"
+        ]
+      },
+      "patch": {
+        "operationId": "MealsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMealDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Met à jour la recette (admin uniquement)",
+        "tags": [
+          "meals"
+        ]
+      },
+      "delete": {
+        "operationId": "MealsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprime un repas (admin uniquement)",
+        "tags": [
+          "meals"
+        ]
+      }
+    },
+    "/meals/{id}/state": {
+      "patch": {
+        "operationId": "MealsController_updateState",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMealStateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Note du repas pour le compte appelant",
+        "tags": [
+          "meals"
+        ]
+      }
+    },
+    "/plan": {
+      "get": {
+        "operationId": "PlanController_find",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Plan courant de l’utilisateur, créé vide au premier accès",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
+    "/plan/generate": {
+      "post": {
+        "operationId": "PlanController_generate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remplit les créneaux vides par tirage pondéré",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
+    "/plan/slots/{slotId}": {
+      "patch": {
+        "operationId": "PlanController_updateSlot",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Met à jour un créneau (repas / portions)",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
+    "/plan/slots/{slotId}/move": {
+      "post": {
+        "operationId": "PlanController_moveSlot",
+        "parameters": [
+          {
+            "name": "slotId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveSlotDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Déplace le contenu d’un créneau vers un autre, en l’échangeant si la cible est occupée",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
+    "/plan/slots": {
+      "delete": {
+        "operationId": "PlanController_clear",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vide les créneaux du plan et les items dérivés de la liste (les items manuels sont conservés)",
+        "tags": [
+          "plan"
+        ]
+      }
+    },
+    "/plan/shopping-list": {
+      "get": {
+        "operationId": "ShoppingListController_forPlan",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liste de courses du plan, tenue à jour à chaque écriture sur le plan",
+        "tags": [
+          "shopping-list"
+        ]
+      }
+    },
+    "/plan/shopping-list/sync": {
+      "post": {
+        "operationId": "ShoppingListController_sync",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recalcule les items dérivés et ramène ceux supprimés à la main (coches conservées)",
+        "tags": [
+          "shopping-list"
+        ]
+      }
+    },
+    "/plan/shopping-list/items": {
+      "post": {
+        "operationId": "ShoppingListController_addItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShoppingListItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ajoute un item manuel à la liste",
+        "tags": [
+          "shopping-list"
+        ]
+      },
+      "delete": {
+        "operationId": "ShoppingListController_clear",
+        "parameters": [
+          {
+            "name": "scope",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "checked"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Vide la liste, ou seulement les items cochés",
+        "tags": [
+          "shopping-list"
+        ]
+      }
+    },
+    "/plan/shopping-list/items/delete": {
+      "post": {
+        "description": "POST et non DELETE : certains proxies ignorent le body d’un DELETE.",
+        "operationId": "ShoppingListController_removeItems",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveShoppingListItemsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprime plusieurs items de la liste",
+        "tags": [
+          "shopping-list"
+        ]
+      }
+    },
+    "/plan/shopping-list/items/{itemId}": {
+      "patch": {
+        "operationId": "ShoppingListController_updateItem",
+        "parameters": [
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShoppingListItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShoppingListItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Met à jour un item (checked, nom, quantité, unité)",
+        "tags": [
+          "shopping-list"
+        ]
+      },
+      "delete": {
+        "operationId": "ShoppingListController_removeItem",
+        "parameters": [
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Supprime un item de la liste",
+        "tags": [
+          "shopping-list"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "PrepaList API",
+    "description": "API meal-prep PrepaList v2",
+    "version": "2",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
+    "schemas": {
+      "MeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "USER",
+              "ADMIN"
+            ]
+          },
+          "shoppingDay": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "role",
+          "shoppingDay"
+        ]
+      },
+      "UpdateMeDto": {
+        "type": "object",
+        "properties": {
+          "shoppingDay": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 6,
+            "description": "Jour de courses (0 = dimanche … 6 = samedi)."
+          }
+        },
+        "required": [
+          "shoppingDay"
+        ]
+      },
+      "RegisterDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "TokenPairDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "accessToken",
+          "refreshToken"
+        ]
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "user@example.com"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "RefreshDto": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "Ingredient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "defaultUnit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ],
+            "nullable": true
+          },
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "defaultUnit",
+          "aisle"
+        ]
+      },
+      "CreateIngredientDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "defaultUnit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ],
+            "nullable": true
+          },
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateIngredientDto": {
+        "type": "object",
+        "properties": {
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true
+          },
+          "defaultUnit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "MealSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Compte propriétaire, null pour une recette de l’application."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PRIVATE",
+              "PENDING",
+              "PUBLISHED"
+            ]
+          },
+          "rating": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredientCount": {
+            "type": "number",
+            "description": "0 = repas à compléter, absent de la liste de courses."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "userId",
+          "status",
+          "rating",
+          "tags",
+          "ingredientCount",
+          "createdAt"
+        ]
+      },
+      "PaginatedMealsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealSummaryDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit"
+        ]
+      },
+      "TagCountDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number",
+            "description": "Nombre de repas qui portent ce tag."
+          }
+        },
+        "required": [
+          "name",
+          "count"
+        ]
+      },
+      "MealIngredientDto": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ]
+          }
+        },
+        "required": [
+          "ingredientId",
+          "quantity",
+          "unit"
+        ]
+      },
+      "CreateMealDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "description": "Normalisés : minuscules, espaces réduits, doublons retirés.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000,
+            "description": "Procédé, astuces. Espaces de bord retirés ; une chaîne vide ou blanche vaut null."
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealIngredientDto"
+            }
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MealIngredient": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ingredient": {
+            "$ref": "#/components/schemas/Ingredient"
+          },
+          "ingredientId": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "ingredient",
+          "ingredientId",
+          "quantity",
+          "unit"
+        ]
+      },
+      "MealDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Compte propriétaire, null pour une recette de l’application."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PRIVATE",
+              "PENDING",
+              "PUBLISHED"
+            ]
+          },
+          "rating": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ingredientCount": {
+            "type": "number",
+            "description": "0 = repas à compléter, absent de la liste de courses."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealIngredient"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "userId",
+          "status",
+          "rating",
+          "tags",
+          "ingredientCount",
+          "createdAt",
+          "description",
+          "ingredients"
+        ]
+      },
+      "UpdateMealDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "tags": {
+            "description": "Normalisés : minuscules, espaces réduits, doublons retirés.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000,
+            "description": "Procédé, astuces. Espaces de bord retirés ; une chaîne vide ou blanche vaut null."
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealIngredientDto"
+            }
+          }
+        }
+      },
+      "UpdateMealStateDto": {
+        "type": "object",
+        "properties": {
+          "rating": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 1,
+            "maximum": 5
+          }
+        }
+      },
+      "PlanSlotDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "dayIndex": {
+            "type": "number",
+            "description": "Rang du jour dans le plan : 0 = premier jour."
+          },
+          "slot": {
+            "type": "string",
+            "enum": [
+              "LUNCH",
+              "DINNER"
+            ]
+          },
+          "mealId": {
+            "type": "string",
+            "nullable": true
+          },
+          "meal": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MealSummaryDto"
+              }
+            ]
+          },
+          "servings": {
+            "type": "number"
+          },
+          "away": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "dayIndex",
+          "slot",
+          "mealId",
+          "meal",
+          "servings",
+          "away"
+        ]
+      },
+      "PlanDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "Premier jour du plan (YYYY-MM-DD). Ancre d’affichage : sert à libeller les jours et à situer le jour courant, jamais à retrouver un plan."
+          },
+          "dayCount": {
+            "type": "number",
+            "description": "Nombre de jours couverts par le plan."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "slots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlanSlotDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "startDate",
+          "dayCount",
+          "createdAt",
+          "slots"
+        ]
+      },
+      "UpdateSlotDto": {
+        "type": "object",
+        "properties": {
+          "mealId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Repas à assigner, ou null pour vider le créneau"
+          },
+          "servings": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "away": {
+            "type": "boolean",
+            "description": "true vide le créneau et le marque « dehors » ; assigner un repas le retire. Incompatible avec un mealId non nul."
+          },
+          "alsoNext": {
+            "type": "boolean",
+            "description": "Recopie le résultat du patch sur le créneau suivant (midi → soir, soir → midi du lendemain), en l’écrasant : le repas et les portions, ou l’état « dehors » (sans portions). 400 après le dernier dîner, ou si le créneau n’a ni repas ni état « dehors »."
+          }
+        }
+      },
+      "MoveSlotDto": {
+        "type": "object",
+        "properties": {
+          "targetSlotId": {
+            "type": "string",
+            "description": "Créneau de destination. Occupé, les deux créneaux échangent leur contenu."
+          }
+        },
+        "required": [
+          "targetSlotId"
+        ]
+      },
+      "ShoppingListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "DERIVED",
+              "MANUAL"
+            ]
+          },
+          "ingredientId": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "nullable": true
+          },
+          "quantity": {
+            "type": "number",
+            "nullable": true
+          },
+          "checked": {
+            "type": "boolean"
+          },
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true,
+            "description": "Celui de l’ingrédient pour un article issu des plats ; null = « Autre »."
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "ingredientId",
+          "name",
+          "unit",
+          "quantity",
+          "checked",
+          "aisle"
+        ]
+      },
+      "IncompleteMealDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ShoppingListDto": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string"
+          },
+          "startDate": {
+            "type": "string",
+            "description": "Premier jour du plan (YYYY-MM-DD)"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShoppingListItemDto"
+            }
+          },
+          "dismissedCount": {
+            "type": "number",
+            "description": "Articles issus des plats que l’utilisateur a supprimés de la liste ; la synchro les ramène"
+          },
+          "incompleteMeals": {
+            "description": "Repas planifiés sans ingrédient : la liste ne les couvre pas.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IncompleteMealDto"
+            }
+          },
+          "aisleOrder": {
+            "type": "array",
+            "description": "Ordre de parcours des rayons, celui du tri de `items`.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PRODUCE",
+                "BAKERY",
+                "MEAT_FISH",
+                "DAIRY",
+                "CHEESE_DELI",
+                "PANTRY_SAVORY",
+                "PANTRY_SWEET",
+                "FROZEN",
+                "DRINKS",
+                "HOUSEHOLD",
+                "OTHER"
+              ]
+            }
+          }
+        },
+        "required": [
+          "planId",
+          "startDate",
+          "items",
+          "dismissedCount",
+          "incompleteMeals",
+          "aisleOrder"
+        ]
+      },
+      "CreateShoppingListItemDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "g",
+              "ml",
+              "pièce",
+              "tranche",
+              "gousse",
+              "feuille",
+              "boîte",
+              "rouleau",
+              "boule",
+              "c.à.s",
+              "c.à.c"
+            ]
+          },
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true,
+            "description": "Rayon d’un article manuel. null = « Autre »."
+          }
+        },
+        "required": [
+          "name",
+          "unit"
+        ]
+      },
+      "RemoveShoppingListItemsDto": {
+        "type": "object",
+        "properties": {
+          "itemIds": {
+            "minItems": 1,
+            "maxItems": 200,
+            "description": "Les ids hors de la liste de l’appelant sont ignorés.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "itemIds"
+        ]
+      },
+      "UpdateShoppingListItemDto": {
+        "type": "object",
+        "properties": {
+          "checked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "quantity": {
+            "type": "number",
+            "minimum": 0
+          },
+          "unit": {
+            "type": "string"
+          },
+          "aisle": {
+            "type": "string",
+            "enum": [
+              "PRODUCE",
+              "BAKERY",
+              "MEAT_FISH",
+              "DAIRY",
+              "CHEESE_DELI",
+              "PANTRY_SAVORY",
+              "PANTRY_SWEET",
+              "FROZEN",
+              "DRINKS",
+              "HOUSEHOLD",
+              "OTHER"
+            ],
+            "nullable": true,
+            "description": "Rayon d’un article manuel. Sur un article issu des plats, 400 s’il diffère du rayon de son ingrédient."
+          }
+        }
+      }
+    }
+  }
+}

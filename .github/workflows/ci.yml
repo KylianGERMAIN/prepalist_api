@@ -6,9 +6,17 @@ on:
   pull_request:
     branches: [main, develop]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -25,6 +33,12 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_USERNAME: prepalist
+      DB_PASSWORD: prepalist
+
     steps:
       - uses: actions/checkout@v4
 
@@ -32,21 +46,26 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm lint:ci
 
-      - run: pnpm test
+      - run: pnpm test:cov
 
       # La base de test est créée et migrée par test/global-setup.ts.
       - run: pnpm test:e2e
-        env:
-          DB_HOST: localhost
-          DB_PORT: 5432
-          DB_USERNAME: prepalist
-          DB_PASSWORD: prepalist
+
+      - name: Schema drift (entities vs migrations)
+        run: |
+          pnpm migration:run
+          pnpm migration:generate --check src/migrations/Check
+
+      - name: OpenAPI contract is up to date
+        run: |
+          pnpm openapi:export
+          git diff --exit-code openapi.json || { echo "::error::openapi.json est périmé : lancer pnpm openapi:export et commiter."; exit 1; }
 
       - run: pnpm build
