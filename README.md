@@ -50,7 +50,7 @@ rétrograde pas le compte : repasser `role = 'USER'` en base.
 
 - **Phase 0** — socle : config, health, users, auth (register / login / refresh JWT), CI.
 - **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
-  CRUD `meals` (filtres tag/name, note par compte),
+  CRUD `meals` (filtres tag/name/incomplete, note par compte, `ingredientCount`),
   catalogue `ingredients` (recherche ILike).
 - **Phase 2** — plan de repas : `Plan` / `PlanSlot`, un seul plan par utilisateur
   créé à la volée sur `GET /plan` (`dayCount` jours × midi/soir), créneaux rangés

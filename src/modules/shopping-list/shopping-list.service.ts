@@ -9,8 +9,7 @@ import { isEnum } from 'class-validator';
 import { EntityManager, FindOptionsWhere, In, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Unit } from '../../common/unit';
-import { Plan } from '../plan/entities/plan.entity';
-import { PlanService } from '../plan/plan.service';
+import { PlanService, PlanView } from '../plan/plan.service';
 import { CreateShoppingListItemDto } from './dto/create-shopping-list-item.dto';
 import { ClearScope } from './dto/remove-shopping-list-items.dto';
 import { ShoppingListDto, ShoppingListItemDto } from './dto/shopping-list.dto';
@@ -195,7 +194,7 @@ export class ShoppingListService {
     return item;
   }
 
-  private async read(plan: Plan): Promise<ShoppingListDto> {
+  private async read(plan: PlanView): Promise<ShoppingListDto> {
     const [items, dismissedCount] = await Promise.all([
       this.items.find({ where: { planId: plan.id, dismissed: false } }),
       this.items.count({ where: { planId: plan.id, dismissed: true } }),
@@ -208,6 +207,19 @@ export class ShoppingListService {
       plan.startDate,
       items.map((item) => new ShoppingListItemDto(item)),
       dismissedCount,
+      this.incompleteMeals(plan),
     );
+  }
+
+  private incompleteMeals(plan: PlanView): { id: string; name: string }[] {
+    const byId = new Map<string, string>();
+    for (const slot of plan.slots) {
+      if (slot.meal && slot.meal.ingredientCount === 0) {
+        byId.set(slot.meal.id, slot.meal.name);
+      }
+    }
+    return [...byId]
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
   }
 }

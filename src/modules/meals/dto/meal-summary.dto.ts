@@ -25,6 +25,11 @@ export class MealSummaryDto {
   @ApiProperty({ type: [String] })
   tags!: string[];
 
+  @ApiProperty({
+    description: '0 = repas à compléter, absent de la liste de courses.',
+  })
+  ingredientCount!: number;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 }

@@ -37,6 +37,14 @@ export class ShoppingListItemDto {
   }
 }
 
+export class IncompleteMealDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
+}
+
 export class ShoppingListDto {
   @ApiProperty()
   planId: string;
@@ -53,15 +61,24 @@ export class ShoppingListDto {
   })
   dismissedCount: number;
 
+  @ApiProperty({
+    type: [IncompleteMealDto],
+    description:
+      'Repas planifiés sans ingrédient : la liste ne les couvre pas.',
+  })
+  incompleteMeals: IncompleteMealDto[];
+
   constructor(
     planId: string,
     startDate: string,
     items: ShoppingListItemDto[],
     dismissedCount: number,
+    incompleteMeals: IncompleteMealDto[],
   ) {
     this.planId = planId;
     this.startDate = startDate;
     this.items = items;
     this.dismissedCount = dismissedCount;
+    this.incompleteMeals = incompleteMeals;
   }
 }
