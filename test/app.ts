@@ -37,7 +37,9 @@ export async function createTestApp({ throttle = false } = {}): Promise<{
 
   const app = moduleRef.createNestApplication();
   configureApp(app);
-  await app.init();
+  // Sans port écouté, chaque requête supertest met ce serveur en écoute puis le
+  // ferme : la première à finir coupe les requêtes concurrentes.
+  await app.listen(0);
 
   return { app, db: app.get(DataSource) };
 }
