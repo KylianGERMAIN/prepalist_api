@@ -69,6 +69,13 @@ Le front est buildé nativement par Vercel (l'option `output: "standalone"` de `
 
 ---
 
+## Après une migration de données manuelle
+
+`deploy/sql/assign-aisles.sql` (rayons des ingrédients, #58) se lance une fois sur
+Neon après le déploiement qui contient la migration `AddAisles` : il ne touche que
+les ingrédients sans rayon, affiche tout le classement pour relecture, et peut être
+rejoué.
+
 ## 4. Releaser
 
 Sur chaque repo à déployer, depuis `main` à jour :
