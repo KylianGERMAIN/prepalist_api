@@ -225,6 +225,26 @@ describe('PlanService', () => {
       random.mockRestore();
     });
 
+    // Jamais cuisinés, donc même fraîcheur (2) : seule la note les départage,
+    // 1 + 2 + 2 = 5 pour 5 étoiles, 1 + 0,4 + 2 = 3,4 pour 1 étoile.
+    it('pondère le tirage par la note', async () => {
+      const pick = async (random: number) => {
+        const target = slot('s1', 0, MealSlot.LUNCH);
+        plans.findOne.mockResolvedValue(planOf([target]));
+        meals.find.mockResolvedValue([
+          meal('top', { rating: 5 }),
+          meal('low', { rating: 1 }),
+        ]);
+        const spy = jest.spyOn(Math, 'random').mockReturnValue(random / 8.4);
+        await service.generate('u1');
+        spy.mockRestore();
+        return target.mealId;
+      };
+
+      expect(await pick(4.9)).toBe('top');
+      expect(await pick(5.1)).toBe('low');
+    });
+
     it('peut reprendre le dîner du jour J au déjeuner du jour J+1 (restes)', async () => {
       const dinner = slot('s1', 0, MealSlot.DINNER, 'm-dinner');
       const nextLunch = slot('s2', 1, MealSlot.LUNCH);

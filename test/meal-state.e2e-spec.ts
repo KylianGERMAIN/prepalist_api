@@ -153,12 +153,19 @@ describe('État par utilisateur (e2e)', () => {
     expect((await list(bob)).items[0]).toMatchObject({ timesCooked: 0 });
   });
 
-  it('refuse un favori, champ retiré du contrat', async () => {
-    await request(app.getHttpServer())
+  it('refuse un favori, champ et filtre retirés du contrat', async () => {
+    const patch = await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
       .send({ isFavorite: true })
       .expect(400);
+    expect(JSON.stringify(patch.body)).toContain('isFavorite');
+
+    const filter = await request(app.getHttpServer())
+      .get('/meals?favorite=true')
+      .set(...bearer(alice))
+      .expect(400);
+    expect(JSON.stringify(filter.body)).toContain('favorite');
   });
 
   // Seul test qui échoue si `ensureForUser` cesse de réinjecter dans les slots

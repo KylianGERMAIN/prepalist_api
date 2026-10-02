@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { Meal } from './entities/meal.entity';
 import { UserMealState } from './entities/user-meal-state.entity';
@@ -83,15 +82,11 @@ export class MealStateService {
     mealId: string,
     dto: UpdateMealStateDto,
   ): Promise<void> {
-    const patch: QueryDeepPartialEntity<UserMealState> = {};
-    if (dto.rating !== undefined) {
-      patch.rating = dto.rating;
-    }
-    if (Object.keys(patch).length === 0) {
+    if (dto.rating === undefined) {
       return;
     }
     await this.states.upsert(
-      { userId, mealId, ...patch },
+      { userId, mealId, rating: dto.rating },
       { conflictPaths: ['userId', 'mealId'] },
     );
   }
