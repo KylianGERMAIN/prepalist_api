@@ -20,8 +20,6 @@ import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
 import { Plan } from './entities/plan.entity';
 import { lastWeekdayOnOrBefore, today } from './plan-dates';
 
-const MS_PER_DAY = 86_400_000;
-const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
 const SLOT_RELATIONS = { slots: { meal: true } } as const;
@@ -52,8 +50,8 @@ export class PlanService {
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
   async ensureForUser(userId: string): Promise<Plan> {
     const plan = await this.ensure(userId, SLOT_RELATIONS);
-    // Note et cuissons appartiennent au compte, pas à la recette : sans
-    // cette passe les créneaux les rendraient à leurs valeurs par défaut.
+    // La note appartient au compte, pas à la recette : sans cette passe les
+    // créneaux la rendraient à sa valeur par défaut.
     const filled = plan.slots.filter(
       (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
     );
@@ -248,20 +246,8 @@ export class PlanService {
     return meals[meals.length - 1].id;
   }
 
-  /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
+  /** Le `3 +` reprend la fraîcheur maximale qu'avaient tous les repas : les proportions du tirage ne bougent pas. */
   private baseScore(meal: MealView): number {
-    const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
-    const freshness = this.freshnessScore(meal.lastCookedAt); // 0 … 2
-    return 1 + rating + freshness;
-  }
-
-  /** Croît avec l'ancienneté. */
-  private freshnessScore(lastCookedAt: Date | null): number {
-    if (!lastCookedAt) {
-      return 2; // jamais cuisinée -> priorité max
-    }
-    // `new Date(...)` défensif : le driver peut livrer une string sur timestamptz.
-    const days = (Date.now() - new Date(lastCookedAt).getTime()) / MS_PER_DAY;
-    return Math.min(days / FRESHNESS_CAP_DAYS, 1) * 2;
+    return 3 + ((meal.rating ?? 3) / 5) * 2; // 3.4 … 5
   }
 }

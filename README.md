@@ -50,12 +50,12 @@ rétrograde pas le compte : repasser `role = 'USER'` en base.
 
 - **Phase 0** — socle : config, health, users, auth (register / login / refresh JWT), CI.
 - **Phase 1** — meals + ingredients : entities `Meal` / `Ingredient` / `MealIngredient`,
-  CRUD `meals` (filtres tag/name, note par compte, `POST /:id/cooked`),
+  CRUD `meals` (filtres tag/name, note par compte),
   catalogue `ingredients` (recherche ILike).
 - **Phase 2** — plan de repas : `Plan` / `PlanSlot`, un seul plan par utilisateur
   créé à la volée sur `GET /plan` (`dayCount` jours × midi/soir), créneaux rangés
   par `dayIndex` et non par date. `POST /plan/generate` (génération pondérée
-  note/fraîcheur + règle des restes), `PATCH /plan/slots/:slotId`,
+  par la note + règle des restes), `PATCH /plan/slots/:slotId`,
   `DELETE /plan/slots` (vide les créneaux et les items dérivés, réancre
   `startDate` sur le jour de courses).
 - **Phase 3** — liste de courses : `GET /plan/shopping-list`, table matérialisée

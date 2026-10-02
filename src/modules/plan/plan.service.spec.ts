@@ -11,16 +11,9 @@ jest.mock('../shopping-list/derived-items', () => ({
   reconcileDerived: jest.fn(),
 }));
 
-const meal = (
-  id: string,
-  extra: Partial<{
-    rating: number;
-    lastCookedAt: Date | null;
-  }> = {},
-) => ({
+const meal = (id: string, extra: Partial<{ rating: number }> = {}) => ({
   id,
   rating: 3,
-  lastCookedAt: null,
   ...extra,
 });
 
@@ -225,8 +218,7 @@ describe('PlanService', () => {
       random.mockRestore();
     });
 
-    // Jamais cuisinés, donc même fraîcheur (2) : seule la note les départage,
-    // 1 + 2 + 2 = 5 pour 5 étoiles, 1 + 0,4 + 2 = 3,4 pour 1 étoile.
+    // 3 + 2 = 5 pour 5 étoiles, 3 + 0,4 = 3,4 pour 1 étoile.
     it('pondère le tirage par la note', async () => {
       const pick = async (random: number) => {
         const target = slot('s1', 0, MealSlot.LUNCH);
