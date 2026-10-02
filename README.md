@@ -30,6 +30,22 @@ pnpm start:dev                # http://localhost:3000  ·  Swagger sur /docs (ho
 | `pnpm migration:generate src/migrations/<Nom>` | génère une migration depuis les entities |
 | `pnpm migration:run` / `pnpm migration:revert` | applique / annule |
 
+## Comptes administrateurs
+
+Le CRUD du catalogue (`meals`, `ingredients`) est réservé au rôle `ADMIN` ;
+`/auth/register` crée toujours un `USER`, même pour un email listé : l'inscription
+ne prouve pas que l'email appartient à celui qui le saisit. Pour promouvoir un
+compte sans SQL, **dans cet ordre** :
+
+1. s'inscrire, et vérifier qu'on se connecte bien avec ce compte ;
+2. ajouter son email à `ADMIN_EMAILS` (séparés par des virgules, casse ignorée) ;
+3. redémarrer l'API (sur Render : *Manual Deploy*) — les comptes `USER` listés
+   sont promus au démarrage.
+
+Le rôle vit dans le JWT : la promotion d'un compte déjà connecté prend effet au
+prochain refresh (15 min max) ou login. Retirer un email de la liste ne
+rétrograde pas le compte : repasser `role = 'USER'` en base.
+
 ## État
 
 - **Phase 0** — socle : config, health, users, auth (register / login / refresh JWT), CI.

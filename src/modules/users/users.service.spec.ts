@@ -1,17 +1,29 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { In } from 'typeorm';
+import { UserRole } from './entities/user.entity';
 import { UsersService } from './users.service';
+
+const configWith = (adminEmails?: string) =>
+  ({ get: () => adminEmails }) as unknown as ConfigService;
 
 describe('UsersService', () => {
   let service: UsersService;
-  let repo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
+  let repo: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    update: jest.Mock;
+  };
 
   beforeEach(() => {
     repo = {
       findOne: jest.fn(),
       create: jest.fn((x: unknown) => x),
       save: jest.fn((x: object) => Promise.resolve({ id: '1', ...x })),
+      update: jest.fn().mockResolvedValue({ affected: 0 }),
     };
-    service = new UsersService(repo as never);
+    service = new UsersService(repo as never, configWith());
   });
 
   it('create throws on a duplicate email', async () => {
@@ -48,5 +60,29 @@ describe('UsersService', () => {
     await expect(service.updateShoppingDay('nope', 2)).rejects.toThrow(
       NotFoundException,
     );
+  });
+
+  it('create registers a listed admin email as USER: register proves no ownership', async () => {
+    service = new UsersService(repo as never, configWith('boss@prepa.list'));
+    repo.findOne.mockResolvedValue(null);
+    const user = await service.create('boss@prepa.list', 'hash');
+    expect(user.role).toBe(UserRole.USER);
+  });
+
+  it('bootstrap promotes existing listed accounts', async () => {
+    service = new UsersService(
+      repo as never,
+      configWith('Boss@Prepa.List,other@x.y'),
+    );
+    await service.onApplicationBootstrap();
+    expect(repo.update).toHaveBeenCalledWith(
+      { email: In(['boss@prepa.list', 'other@x.y']), role: UserRole.USER },
+      { role: UserRole.ADMIN },
+    );
+  });
+
+  it('bootstrap touches nothing without ADMIN_EMAILS', async () => {
+    await service.onApplicationBootstrap();
+    expect(repo.update).not.toHaveBeenCalled();
   });
 });
