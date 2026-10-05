@@ -9,6 +9,7 @@ import { DeepPartial, FindOptionsRelations, Repository } from 'typeorm';
 import { isUniqueViolation } from '../../common/postgres-errors';
 import { Meal } from '../meals/entities/meal.entity';
 import { MealStateService, MealView } from '../meals/meal-state.service';
+import { lockPlan, reconcileDerived } from '../shopping-list/derived-items';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -17,16 +18,17 @@ import { UsersService } from '../users/users.service';
 import { UpdateSlotDto } from './dto/update-slot.dto';
 import { MealSlot, PlanSlot } from './entities/plan-slot.entity';
 import { Plan } from './entities/plan.entity';
+import { nextSlotOf } from './next-slot';
 import { lastWeekdayOnOrBefore, today } from './plan-dates';
 
-const MS_PER_DAY = 86_400_000;
-const FRESHNESS_CAP_DAYS = 14; // au-delà, fraîcheur maximale
 const LEFTOVER_PROBABILITY = 0.5; // dîner J -> déjeuner J+1
 const DEFAULT_DAY_COUNT = 7;
 const SLOT_RELATIONS = { slots: { meal: true } } as const;
-const INGREDIENT_RELATIONS = {
-  slots: { meal: { ingredients: { ingredient: true } } },
-} as const;
+
+/** Plan rendu par `ensureForUser` : ses repas sont des vues (note, nombre d'ingrédients). */
+export type PlanView = Omit<Plan, 'slots'> & {
+  slots: (Omit<PlanSlot, 'meal'> & { meal?: MealView | null })[];
+};
 
 @Injectable()
 export class PlanService {
@@ -52,10 +54,10 @@ export class PlanService {
   }
 
   /** Un seul plan par compte : aucune date n'entre dans sa recherche. */
-  async ensureForUser(userId: string): Promise<Plan> {
+  async ensureForUser(userId: string): Promise<PlanView> {
     const plan = await this.ensure(userId, SLOT_RELATIONS);
-    // Favori, note et cuissons appartiennent au compte, pas à la recette : sans
-    // cette passe les créneaux les rendraient à leurs valeurs par défaut.
+    // Note du compte et nombre d'ingrédients ne viennent pas de la relation :
+    // sans cette passe les créneaux les rendraient à leurs valeurs par défaut.
     const filled = plan.slots.filter(
       (slot): slot is PlanSlot & { meal: Meal } => Boolean(slot.meal),
     );
@@ -64,12 +66,7 @@ export class PlanService {
       filled.map((slot) => slot.meal),
     );
     filled.forEach((slot, index) => (slot.meal = attached[index]));
-    return plan;
-  }
-
-  /** Même plan, avec de quoi agréger la liste de courses. */
-  async ensureForUserWithIngredients(userId: string): Promise<Plan> {
-    return this.ensure(userId, INGREDIENT_RELATIONS);
+    return plan as PlanView;
   }
 
   private async ensure(
@@ -128,6 +125,9 @@ export class PlanService {
     const changed: PlanSlot[] = [];
 
     for (const slot of ordered) {
+      if (slot.away) {
+        continue;
+      }
       if (slot.mealId) {
         placed.set(slot.mealId, (placed.get(slot.mealId) ?? 0) + 1);
         if (slot.slot === MealSlot.DINNER) {
@@ -157,12 +157,17 @@ export class PlanService {
     // La seule colonne FK, sans la relation `meal` : chargée, elle écraserait au
     // save le mealId qu'on vient de poser.
     if (changed.length > 0) {
-      await this.slots.save(
-        changed.map((s) => ({
-          id: s.id,
-          mealId: s.mealId,
-        })) as DeepPartial<PlanSlot>[],
-      );
+      await this.plans.manager.transaction(async (manager) => {
+        await lockPlan(manager, plan.id);
+        await manager.save(
+          PlanSlot,
+          changed.map((s) => ({
+            id: s.id,
+            mealId: s.mealId,
+          })) as DeepPartial<PlanSlot>[],
+        );
+        await reconcileDerived(manager, plan.id);
+      });
     }
     return this.ensureForUser(userId);
   }
@@ -178,8 +183,20 @@ export class PlanService {
       throw new NotFoundException('Créneau introuvable');
     }
 
+    if (dto.away && dto.mealId) {
+      throw new BadRequestException(
+        'Un créneau « dehors » ne porte pas de repas',
+      );
+    }
+
     const patch: DeepPartial<PlanSlot> = {};
-    if (dto.mealId !== undefined) {
+    if (dto.away !== undefined) {
+      patch.away = dto.away;
+      if (dto.away) {
+        patch.mealId = null;
+      }
+    }
+    if (dto.mealId !== undefined && !dto.away) {
       if (dto.mealId !== null) {
         const meal = await this.meals.findOne({ where: { id: dto.mealId } });
         if (!meal) {
@@ -187,13 +204,92 @@ export class PlanService {
         }
       }
       patch.mealId = dto.mealId;
+      // Vider un créneau le remet à « non décidé », « dehors » compris.
+      patch.away = false;
     }
     if (dto.servings !== undefined) {
       patch.servings = dto.servings;
     }
+    if (Object.keys(patch).length === 0 && !dto.alsoNext) {
+      return plan;
+    }
 
-    // update() écrit les colonnes directement (évite le conflit FK/relation).
-    await this.slots.update(slotId, patch);
+    let nextId: string | undefined;
+    if (dto.alsoNext) {
+      const position = nextSlotOf(slot, plan.dayCount);
+      nextId = plan.slots.find(
+        (s) => s.dayIndex === position?.dayIndex && s.slot === position?.slot,
+      )?.id;
+      if (!nextId) {
+        throw new BadRequestException(
+          'Aucun créneau après le dernier dîner du plan',
+        );
+      }
+    }
+
+    await this.plans.manager.transaction(async (manager) => {
+      await lockPlan(manager, plan.id);
+      if (Object.keys(patch).length > 0) {
+        // update() écrit les colonnes directement (évite le conflit FK/relation).
+        await manager.update(PlanSlot, slotId, patch);
+      }
+      if (nextId) {
+        // Relu sous le verrou : lu avant, il pourrait recopier un repas déjà remplacé.
+        const { mealId, servings, away } = await manager.findOneByOrFail(
+          PlanSlot,
+          { id: slotId },
+        );
+        if (!mealId && !away) {
+          throw new BadRequestException(
+            'Rien à reporter : le créneau est vide',
+          );
+        }
+        await manager.update(
+          PlanSlot,
+          nextId,
+          away ? { away, mealId: null } : { mealId, servings, away: false },
+        );
+      }
+      await reconcileDerived(manager, plan.id);
+    });
+    return this.ensureForUser(userId);
+  }
+
+  /** Échange repas, portions et état « dehors » des deux créneaux ; cible vide = déplacement. */
+  async moveSlot(
+    userId: string,
+    slotId: string,
+    targetSlotId: string,
+  ): Promise<PlanView> {
+    const plan = await this.ensureForUser(userId);
+    const ids = new Set(plan.slots.map((s) => s.id));
+    if (!ids.has(slotId) || !ids.has(targetSlotId)) {
+      throw new NotFoundException('Créneau introuvable');
+    }
+    if (slotId === targetSlotId) {
+      return plan;
+    }
+
+    await this.plans.manager.transaction(async (manager) => {
+      // Toute écriture sur les créneaux d'un plan prend d'abord ce verrou (y compris
+      // la suppression d'un repas planifié) : deux échanges croisés s'exécutent
+      // l'un après l'autre, sans deadlock.
+      await lockPlan(manager, plan.id);
+      const [source, target] = await Promise.all(
+        [slotId, targetSlotId].map((id) =>
+          manager.findOneByOrFail(PlanSlot, { id }),
+        ),
+      );
+      const contentOf = ({ mealId, servings, away }: PlanSlot) => ({
+        mealId,
+        servings,
+        away,
+      });
+      await manager.update(PlanSlot, source.id, contentOf(target));
+      await manager.update(PlanSlot, target.id, contentOf(source));
+      // Pas de réconciliation : les mêmes repas avec les mêmes portions, la liste
+      // de courses ne change pas.
+    });
     return this.ensureForUser(userId);
   }
 
@@ -206,10 +302,14 @@ export class PlanService {
     const startDate = await this.anchorFor(userId);
 
     // Atomique : des créneaux vidés avec des dérivés survivants afficheraient les
-    // ingrédients d'un plan disparu, et l'init paresseuse exige une liste vide pour
-    // rattraper.
+    // ingrédients d'un plan disparu.
     await this.plans.manager.transaction(async (manager) => {
-      await manager.update(PlanSlot, { planId: plan.id }, { mealId: null });
+      await lockPlan(manager, plan.id);
+      await manager.update(
+        PlanSlot,
+        { planId: plan.id },
+        { mealId: null, away: false },
+      );
       await manager.delete(ShoppingListItem, {
         planId: plan.id,
         source: ShoppingItemSource.DERIVED,
@@ -243,21 +343,8 @@ export class PlanService {
     return meals[meals.length - 1].id;
   }
 
-  /** Le `1 +` garantit un score non nul : un poids nul n'est jamais tiré. */
+  /** Le `3 +` reprend la fraîcheur maximale qu'avaient tous les repas : les proportions du tirage ne bougent pas. */
   private baseScore(meal: MealView): number {
-    const favorite = meal.isFavorite ? 2 : 0;
-    const rating = ((meal.rating ?? 3) / 5) * 2; // 0.4 … 2
-    const freshness = this.freshnessScore(meal.lastCookedAt); // 0 … 2
-    return 1 + favorite + rating + freshness;
-  }
-
-  /** Croît avec l'ancienneté. */
-  private freshnessScore(lastCookedAt: Date | null): number {
-    if (!lastCookedAt) {
-      return 2; // jamais cuisinée -> priorité max
-    }
-    // `new Date(...)` défensif : le driver peut livrer une string sur timestamptz.
-    const days = (Date.now() - new Date(lastCookedAt).getTime()) / MS_PER_DAY;
-    return Math.min(days / FRESHNESS_CAP_DAYS, 1) * 2;
+    return 3 + ((meal.rating ?? 3) / 5) * 2; // 3.4 … 5
   }
 }

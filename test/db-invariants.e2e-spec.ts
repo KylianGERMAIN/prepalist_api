@@ -212,9 +212,10 @@ describe('Invariants de base (e2e)', () => {
         { ingredientId: tomate, quantity: 250, unit: 'g' },
       ]);
       await request(app.getHttpServer())
-        .post(`/meals/${mealId}/cooked`)
+        .patch(`/meals/${mealId}/state`)
         .set(...bearer(user))
-        .expect(201);
+        .send({ rating: 4 })
+        .expect(200);
     });
 
     const countState = async (): Promise<number> => {
@@ -224,8 +225,8 @@ describe('Invariants de base (e2e)', () => {
       return rows[0].n as number;
     };
 
-    // PK (user_id, meal_id) : c'est elle que vise le ON CONFLICT de markCooked,
-    // sans quoi chaque cuisson insérerait une ligne de plus.
+    // PK (user_id, meal_id) : c'est la cible du ON CONFLICT de l'upsert de la
+    // note, qui échouerait sans elle.
     it('interdit deux lignes d’état pour un même couple compte/repas', async () => {
       const [{ user_id: userId }] = await db.query(
         'SELECT user_id FROM user_meal_state LIMIT 1',

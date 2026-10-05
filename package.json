@@ -1,6 +1,6 @@
 {
   "name": "prepalist-api",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "API meal-prep PrepaList v2 (NestJS + TypeORM + PostgreSQL)",
   "private": true,
   "packageManager": "pnpm@10.30.0",
@@ -16,11 +16,13 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/data-source.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/data-source.ts",
     "migration:run:prod": "typeorm migration:run -d dist/config/data-source.js",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/data-source.ts",
+    "openapi:export": "ts-node src/openapi-export.ts",
     "prepare": "husky"
   },
   "dependencies": {
@@ -33,14 +35,17 @@
     "@nestjs/swagger": "^11.0.3",
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@sentry/nestjs": "^11.3.0",
     "bcrypt": "^5.1.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.7",
     "helmet": "^8.0.0",
+    "nestjs-pino": "^5.3.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.13.1",
+    "pino-http": "^11.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20"
@@ -97,10 +102,19 @@
       "!**/*.dto.ts",
       "!**/*.controller.ts",
       "!**/main.ts",
+      "!**/openapi-export.ts",
       "!**/migrations/**",
       "!**/config/**"
     ],
     "coverageDirectory": "../coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 80,
+        "branches": 70,
+        "functions": 74,
+        "lines": 81
+      }
+    },
     "testEnvironment": "node"
   }
 }

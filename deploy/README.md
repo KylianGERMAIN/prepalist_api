@@ -50,6 +50,7 @@ Rien d'autre : les tables sont créées par les migrations TypeORM, jouées au d
   Tenable parce que le tier Free n'a qu'une instance. En multi-réplicas, chaque réplique jouerait les migrations en parallèle — c'est ce que le commentaire du `Dockerfile` prévoit en gardant `CMD ["node", "dist/main"]` et en renvoyant les migrations vers une étape de release dédiée.
 - **Health Check Path** : `/health`. **Liveness seule** : la sonde base a été retirée (`afeed64`), la route ne touche jamais Postgres et répond toujours `200` tant que le process vit. Une base tombée ne la fait pas passer au rouge — c'est volontaire, une requête DB à chaque ping réveillerait Neon et brûlerait son quota compute.
 - **Environment** : renseigner les variables de `deploy/.env.prod.example` (les `DB_*` de Neon, `DB_SSL=true`, `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — générer via `openssl rand -base64 48`). `PORT` est injecté par Render, ne pas le fixer. `CORS_ORIGINS` peut rester vide (le front tape l'API en server-side, pas de CORS navigateur) : vide en production n'autorise **aucune** origine. `NODE_ENV` doit valoir exactement `production` — c'est lui qui coupe Swagger.
+- **Sentry** (optionnel) : `SENTRY_DSN` = DSN du projet Sentry (Settings → Client Keys). Absente, le suivi d'erreurs est désactivé. Seuls les 5xx et les exceptions non gérées sont envoyés, tagués `requestId` et `userId`, avec `release` = version du `package.json`. Les logs sortent en JSON sur stdout (une ligne par requête), lisibles dans les logs Render.
 
 Puis **Settings → Deploy Hook** : copier l'URL → la mettre dans le repo `prepalist_api` :
 `Settings → Secrets and variables → Actions → New secret` : `RENDER_DEPLOY_HOOK`.
@@ -68,6 +69,13 @@ Noter l'**URL publique** du service Render (`https://prepalist-api-xxxx.onrender
 Le front est buildé nativement par Vercel (l'option `output: "standalone"` de `next.config.ts` est ignorée par Vercel, sans effet).
 
 ---
+
+## Après une migration de données manuelle
+
+`deploy/sql/assign-aisles.sql` (rayons des ingrédients, #58) se lance une fois sur
+Neon après le déploiement qui contient la migration `AddAisles` : il ne touche que
+les ingrédients sans rayon, affiche tout le classement pour relecture, et peut être
+rejoué.
 
 ## 4. Releaser
 

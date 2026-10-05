@@ -2,6 +2,7 @@
 
 Conventions condensées pour les sessions Claude Code sur ce dépôt. Source de
 vérité du cadrage : `../instruction.md`.
+Architecture, schéma, flux, glossaire et ADR : `docs/` (entrée : `docs/architecture.md`).
 
 ## Stack
 
@@ -27,7 +28,7 @@ helmet · class-validator / class-transformer. Jest pour les specs.
 ```
 src/
   config/data-source.ts     # options TypeORM partagées app + CLI migrations
-  common/                   # dto paginated, guards, decorators, filter, middleware, interceptor
+  common/                   # dto paginated, guards, decorators, filter, middleware, logger (pino)
   modules/
     health/ users/ token/ auth/
   migrations/
@@ -56,6 +57,16 @@ src/
   `snake_case` (via `name:`), enums `UPPER_SNAKE`.
 - Toute modif de schéma = une migration générée et commitée dans le même PR.
   Ne jamais éditer une migration déjà mergée.
+- Une PR qui change le schéma ou un flux met à jour le doc correspondant
+  (`docs/data-model.md`, `docs/flows.md`). Une décision qui en remplace une autre
+  ajoute une ADR et marque l'ancienne `Superseded`, sans la réécrire.
+- Dans `docs/`, le code applicatif se cite par fichier + symbole ; `fichier:ligne`
+  est réservé aux migrations, immuables une fois mergées.
+- Tout changement de contrôleur ou de DTO = `pnpm openapi:export` et `openapi.json`
+  commité dans le même PR : la CI échoue sur un contrat périmé, et le front en tire ses types.
+- **Enum partagé (`unit_enum`, `aisle_enum`)** : ajouter une valeur se fait par une migration
+  écrite à la main. `migration:generate` renomme le type et le recrée colonne
+  par colonne, séquence fragile quand deux tables en dépendent.
 
 ## Git
 

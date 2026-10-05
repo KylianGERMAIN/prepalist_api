@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsPositive, IsUUID } from 'class-validator';
+import { Unit } from '../../../common/unit';
 
 export class MealIngredientDto {
   @ApiProperty()
@@ -10,8 +11,7 @@ export class MealIngredientDto {
   @IsPositive()
   quantity!: number;
 
-  @ApiProperty()
-  @IsString()
-  @IsNotEmpty()
-  unit!: string;
+  @ApiProperty({ enum: Unit })
+  @IsEnum(Unit)
+  unit!: Unit;
 }

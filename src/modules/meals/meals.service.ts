@@ -4,22 +4,23 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { PaginatedDto } from '../../common/dto/paginated.dto';
 import { Ingredient } from '../ingredients/entities/ingredient.entity';
 import { CreateMealDto } from './dto/create-meal.dto';
 import { MealIngredientDto } from './dto/meal-ingredient.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
+import { TagCountDto } from './dto/tag-count.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
+import {
+  lockPlan,
+  planIdsUsingMeal,
+  reconcilePlans,
+} from '../shopping-list/derived-items';
 import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal, MealStatus } from './entities/meal.entity';
 import { MealStateService, MealView } from './meal-state.service';
-
-const FAVORITE_OF_USER = `EXISTS (
-  SELECT 1 FROM "user_meal_state" s
-  WHERE s."meal_id" = meal.id AND s."user_id" = :userId AND s."is_favorite"
-)`;
 
 @Injectable()
 export class MealsService {
@@ -39,9 +40,11 @@ export class MealsService {
       userId: null,
       status: MealStatus.PUBLISHED,
       tags: dto.tags ?? [],
+      description: dto.description ?? null,
       ingredients: await this.buildIngredients(dto.ingredients ?? []),
     });
     const saved = await this.meals.save(meal);
+    await this.adoptDefaultUnits(dto.ingredients ?? []);
     // Relit : les lignes de buildIngredients n'ont pas leur relation `ingredient`
     // hydratée, la réponse omettrait le nom de l'ingrédient.
     return this.findOneFor(userId, saved.id);
@@ -54,17 +57,16 @@ export class MealsService {
   ): Promise<PaginatedDto<MealView>> {
     const qb = this.meals.createQueryBuilder('meal');
 
-    if (query.favorite !== undefined) {
-      qb.andWhere(
-        query.favorite ? FAVORITE_OF_USER : `NOT ${FAVORITE_OF_USER}`,
-        { userId },
-      );
-    }
     if (query.name) {
       qb.andWhere('meal.name ILIKE :name', { name: `%${query.name}%` });
     }
     if (query.tag) {
       qb.andWhere(':tag = ANY(meal.tags)', { tag: query.tag });
+    }
+    if (query.incomplete) {
+      qb.andWhere(
+        'NOT EXISTS (SELECT 1 FROM meal_ingredients mi WHERE mi.meal_id = meal.id)',
+      );
     }
 
     const [items, total] = await qb
@@ -81,13 +83,29 @@ export class MealsService {
     );
   }
 
+  /** Mêmes repas visibles que `findAll` : le jour où le catalogue sera scopé, les deux changent ensemble. */
+  async tags(): Promise<TagCountDto[]> {
+    const rows: TagCountDto[] = await this.meals.query(
+      `SELECT t AS name, count(*)::int AS count
+       FROM meals, unnest(tags) AS t
+       GROUP BY t`,
+    );
+    // Ex aequo triés en JS : l'ordre SQL dépendrait de la collation de la base.
+    return rows.sort(
+      (a, b) => b.count - a.count || a.name.localeCompare(b.name, 'fr'),
+    );
+  }
+
   async findOne(id: string): Promise<Meal> {
     // `ingredients` chargés : `update` les remplace en bloc, et sans la
     // collection en mémoire `orphanedRowAction` n'a aucun orphelin à supprimer.
-    const meal = await this.meals.findOne({
-      where: { id },
-      relations: { ingredients: { ingredient: true } },
-    });
+    const meal = await this.meals
+      .createQueryBuilder('meal')
+      .addSelect('meal.description')
+      .leftJoinAndSelect('meal.ingredients', 'mi')
+      .leftJoinAndSelect('mi.ingredient', 'ingredient')
+      .where('meal.id = :id', { id })
+      .getOne();
     if (!meal) {
       throw new NotFoundException('Repas introuvable');
     }
@@ -109,24 +127,35 @@ export class MealsService {
 
     if (dto.name !== undefined) meal.name = dto.name;
     if (dto.tags !== undefined) meal.tags = dto.tags;
+    if (dto.description !== undefined) meal.description = dto.description;
     if (dto.ingredients !== undefined) {
       meal.ingredients = await this.buildIngredients(dto.ingredients);
     }
 
-    await this.meals.save(meal);
+    await this.meals.manager.transaction(async (manager) => {
+      await manager.save(meal);
+      if (dto.ingredients !== undefined) {
+        await reconcilePlans(manager, await planIdsUsingMeal(manager, id));
+      }
+    });
+    await this.adoptDefaultUnits(dto.ingredients ?? []);
     // Même raison que dans `create` : la réponse doit avoir la forme du GET.
     return this.findOneFor(userId, id);
   }
 
   async remove(id: string): Promise<void> {
     const meal = await this.findOne(id);
-    await this.meals.remove(meal);
-  }
-
-  async markCooked(userId: string, id: string): Promise<MealView> {
-    await this.findOne(id); // 404 si absent
-    await this.state.markCooked(userId, id);
-    return this.findOneFor(userId, id);
+    await this.meals.manager.transaction(async (manager) => {
+      // Lus avant : la suppression passe `meal_id` à NULL sur les créneaux. Plans
+      // verrouillés avant ce SET NULL, dans l'ordre de toute autre écriture sur
+      // leurs créneaux : l'ordre inverse peut finir en deadlock.
+      const planIds = await planIdsUsingMeal(manager, id);
+      for (const planId of planIds) {
+        await lockPlan(manager, planId);
+      }
+      await manager.remove(meal);
+      await reconcilePlans(manager, planIds);
+    });
   }
 
   async updateState(
@@ -137,6 +166,17 @@ export class MealsService {
     await this.findOne(id); // 404 si absent
     await this.state.patch(userId, id, dto);
     return this.findOneFor(userId, id);
+  }
+
+  // Seul chemin qui donne une unité à un ingrédient créé sans : le front le crée
+  // avant que la ligne ait la sienne, et aucune route ne la fixe après coup.
+  private async adoptDefaultUnits(items: MealIngredientDto[]): Promise<void> {
+    for (const item of items) {
+      await this.ingredients.update(
+        { id: item.ingredientId, defaultUnit: IsNull() },
+        { defaultUnit: item.unit },
+      );
+    }
   }
 
   private async buildIngredients(

@@ -4,6 +4,9 @@ import { MealSummaryDto } from './meal-summary.dto';
 
 /** Le détail : le résumé plus les lignes d'ingrédients. */
 export class MealDto extends MealSummaryDto {
+  @ApiProperty({ type: String, nullable: true })
+  description!: string | null;
+
   @ApiProperty({ type: () => [MealIngredient] })
   ingredients!: MealIngredient[];
 }

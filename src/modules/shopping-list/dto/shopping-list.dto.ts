@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Aisle, AISLE_ORDER } from '../../../common/aisle';
 import {
   ShoppingItemSource,
   ShoppingListItem,
@@ -26,6 +27,14 @@ export class ShoppingListItemDto {
   @ApiProperty()
   checked: boolean;
 
+  @ApiProperty({
+    enum: Aisle,
+    nullable: true,
+    description:
+      'Celui de l’ingrédient pour un article issu des plats ; null = « Autre ».',
+  })
+  aisle: Aisle | null;
+
   constructor(item: ShoppingListItem) {
     this.id = item.id;
     this.source = item.source;
@@ -34,7 +43,16 @@ export class ShoppingListItemDto {
     this.unit = item.unit;
     this.quantity = item.quantity;
     this.checked = item.checked;
+    this.aisle = item.aisle ?? item.ingredient?.aisle ?? null;
   }
+}
+
+export class IncompleteMealDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  name!: string;
 }
 
 export class ShoppingListDto {
@@ -47,9 +65,37 @@ export class ShoppingListDto {
   @ApiProperty({ type: [ShoppingListItemDto] })
   items: ShoppingListItemDto[];
 
-  constructor(planId: string, startDate: string, items: ShoppingListItemDto[]) {
+  @ApiProperty({
+    description:
+      'Articles issus des plats que l’utilisateur a supprimés de la liste ; la synchro les ramène',
+  })
+  dismissedCount: number;
+
+  @ApiProperty({
+    type: [IncompleteMealDto],
+    description:
+      'Repas planifiés sans ingrédient : la liste ne les couvre pas.',
+  })
+  incompleteMeals: IncompleteMealDto[];
+
+  @ApiProperty({
+    enum: Aisle,
+    isArray: true,
+    description: 'Ordre de parcours des rayons, celui du tri de `items`.',
+  })
+  aisleOrder: Aisle[] = AISLE_ORDER;
+
+  constructor(
+    planId: string,
+    startDate: string,
+    items: ShoppingListItemDto[],
+    dismissedCount: number,
+    incompleteMeals: IncompleteMealDto[],
+  ) {
     this.planId = planId;
     this.startDate = startDate;
     this.items = items;
+    this.dismissedCount = dismissedCount;
+    this.incompleteMeals = incompleteMeals;
   }
 }

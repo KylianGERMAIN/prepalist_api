@@ -1,53 +1,68 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
+import { MealIngredient } from './entities/meal-ingredient.entity';
 import { Meal } from './entities/meal.entity';
 import { UserMealState } from './entities/user-meal-state.entity';
 
-export interface MealStateFields {
-  isFavorite: boolean;
+export interface MealViewFields {
   rating: number | null;
-  lastCookedAt: Date | null;
-  timesCooked: number;
+  /** 0 = repas « à compléter » : il ne nourrit pas la liste de courses. */
+  ingredientCount: number;
 }
 
-export type MealView = Meal & MealStateFields;
+export type MealView = Meal & MealViewFields;
 
-const NEVER_TOUCHED: MealStateFields = {
-  isFavorite: false,
-  rating: null,
-  lastCookedAt: null,
-  timesCooked: 0,
-};
+const NEVER_RATED = { rating: null };
 
 @Injectable()
 export class MealStateService {
   constructor(
     @InjectRepository(UserMealState)
     private readonly states: Repository<UserMealState>,
+    @InjectRepository(MealIngredient)
+    private readonly mealIngredients: Repository<MealIngredient>,
   ) {}
 
+  /** Note du compte et nombre d'ingrédients, en deux requêtes quel que soit le nombre de repas. */
   async attachFor<T extends Meal>(
     userId: string,
     meals: T[],
-  ): Promise<(T & MealStateFields)[]> {
-    const states = await this.forUser(
-      userId,
-      meals.map((meal) => meal.id),
-    );
+  ): Promise<(T & MealViewFields)[]> {
+    const ids = meals.map((meal) => meal.id);
+    const [states, counts] = await Promise.all([
+      this.forUser(userId, ids),
+      this.ingredientCounts(ids),
+    ]);
     return meals.map((meal) => ({
       ...meal,
-      ...(states.get(meal.id) ?? NEVER_TOUCHED),
+      ...(states.get(meal.id) ?? NEVER_RATED),
+      ingredientCount: counts.get(meal.id) ?? 0,
     }));
+  }
+
+  private async ingredientCounts(
+    mealIds: string[],
+  ): Promise<Map<string, number>> {
+    if (mealIds.length === 0) {
+      return new Map();
+    }
+    const rows = await this.mealIngredients
+      .createQueryBuilder('mi')
+      .select('mi.meal_id', 'mealId')
+      .addSelect('COUNT(*)::int', 'count')
+      .where('mi.meal_id IN (:...mealIds)', { mealIds })
+      .groupBy('mi.meal_id')
+      .getRawMany<{ mealId: string; count: number }>();
+    return new Map(rows.map((r) => [r.mealId, r.count]));
   }
 
   /** Absent de la Map = jamais touché par ce compte, pas « inconnu ». */
   private async forUser(
     userId: string,
     mealIds: string[],
-  ): Promise<Map<string, MealStateFields>> {
+  ): Promise<Map<string, { rating: number | null }>> {
     if (mealIds.length === 0) {
       return new Map();
     }
@@ -56,29 +71,7 @@ export class MealStateService {
     });
     // Champ par champ, et non la ligne entière : `attachFor` la fusionne dans
     // le repas, où `userId` et `mealId` de l'état écraseraient ceux de la recette.
-    return new Map(
-      rows.map((r) => [
-        r.mealId,
-        {
-          isFavorite: r.isFavorite,
-          rating: r.rating,
-          lastCookedAt: r.lastCookedAt,
-          timesCooked: r.timesCooked,
-        },
-      ]),
-    );
-  }
-
-  /** Incrément en SQL, sinon deux cuissons concurrentes n'en compteraient qu'une. */
-  markCooked(userId: string, mealId: string): Promise<void> {
-    return this.states.query(
-      `INSERT INTO "user_meal_state" ("user_id", "meal_id", "last_cooked_at", "times_cooked")
-       VALUES ($1, $2, now(), 1)
-       ON CONFLICT ("user_id", "meal_id") DO UPDATE SET
-         "last_cooked_at" = now(),
-         "times_cooked" = "user_meal_state"."times_cooked" + 1`,
-      [userId, mealId],
-    );
+    return new Map(rows.map((r) => [r.mealId, { rating: r.rating }]));
   }
 
   async patch(
@@ -86,18 +79,11 @@ export class MealStateService {
     mealId: string,
     dto: UpdateMealStateDto,
   ): Promise<void> {
-    const patch: QueryDeepPartialEntity<UserMealState> = {};
-    if (dto.isFavorite !== undefined) {
-      patch.isFavorite = dto.isFavorite;
-    }
-    if (dto.rating !== undefined) {
-      patch.rating = dto.rating;
-    }
-    if (Object.keys(patch).length === 0) {
+    if (dto.rating === undefined) {
       return;
     }
     await this.states.upsert(
-      { userId, mealId, ...patch },
+      { userId, mealId, rating: dto.rating },
       { conflictPaths: ['userId', 'mealId'] },
     );
   }

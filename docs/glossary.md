@@ -1,0 +1,14 @@
+# Glossaire
+
+| Terme | Dans le code | Définition |
+| --- | --- | --- |
+| Plan | `Plan`, table `plans` | Le planning de repas d'un compte. Un seul par utilisateur (`UQ_plans_user`), créé vide au premier `GET /plan`. `start_date` sert d'ancre d'affichage et ne sert jamais à retrouver le plan (`Plan.startDate`, `src/modules/plan/entities/plan.entity.ts`). Couvre `day_count` jours, 7 par défaut. |
+| Créneau | `PlanSlot`, table `plan_slots` | Un repas du plan, repéré par `day_index` (0 = premier jour) et `slot` (`LUNCH` midi, `DINNER` soir). Porte un repas ou rien, des portions, et l'état « dehors ». |
+| Portion | `plan_slots.servings` | Nombre de parts à préparer pour un créneau, de 1 à 20 (`UpdateSlotDto.servings`). Les quantités d'une recette sont pour une portion : la liste multiplie `quantity` par `servings` (`computeDerived`, `src/modules/shopping-list/derived-items.ts`). |
+| Unité d'achat | `Unit`, type `unit_enum` | L'unité dans laquelle on achète, pas celle de la recette : des tranches de jambon, pas 40 g (`Unit`, `src/common/unit.ts`). Jeu fermé de onze valeurs. Un ingrédient utilisé avec deux unités donne deux lignes de courses. |
+| DERIVED / MANUAL | `ShoppingItemSource` | Origine d'un item de la liste. `DERIVED` : calculé depuis les créneaux, réconcilié à chaque écriture sur le plan. `MANUAL` : ajouté à la main, jamais touché par la réconciliation (`ShoppingListItem`, `src/modules/shopping-list/entities/shopping-list-item.entity.ts`). |
+| Rayon | `Aisle`, type `aisle_enum` | Rayon du magasin. L'ordre de déclaration de l'enum est l'ordre de parcours et trie la liste ; un rayon absent se range avec `OTHER` (`aisleRank`, `src/common/aisle.ts`). Un `DERIVED` prend le rayon de son ingrédient, un `MANUAL` porte le sien. |
+| Dehors | `plan_slots.away` | Créneau décidé sans repas à cuisiner (repas pris à l'extérieur). Exclusif d'un repas, garanti par `CHK_plan_slots_away_empty`. La génération le saute (`PlanService.generate`). |
+| Tombstone `dismissed` | `shopping_list_items.dismissed` | Item `DERIVED` supprimé à la main : masqué, mais gardé pour que la réconciliation ne le recrée pas. Seul `POST /plan/shopping-list/sync` le ramène, ou une hausse de quantité sur un item déjà coché (`diffDerived`, `src/modules/shopping-list/derived-items.ts`). |
+| Jour de courses | `users.shopping_day` | Jour de la semaine (0 = dimanche … 6 = samedi, lundi par défaut) sur lequel s'ancre `start_date` : à la création du plan et à chaque `DELETE /plan/slots`, seul geste qui réancre (`PlanService.clearSlots`). |
+| Restes | `LEFTOVER_PROBABILITY` | Règle de la génération : un midi vide reprend une fois sur deux le dîner de la veille (`LEFTOVER_PROBABILITY` et `PlanService.generate`, `src/modules/plan/plan.service.ts`). Les deux créneaux comptent chacun leurs portions dans la liste : c'est voulu (issue #21, fermée en not planned le 2026-10-02). |

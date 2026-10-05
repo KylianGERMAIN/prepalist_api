@@ -12,10 +12,7 @@ import {
 
 interface MealBody {
   id: string;
-  isFavorite: boolean;
   rating: number | null;
-  lastCookedAt: string | null;
-  timesCooked: number;
 }
 
 /**
@@ -72,11 +69,12 @@ describe('État par utilisateur (e2e)', () => {
     return res.body as { items: MealBody[] };
   };
 
-  const cook = (as: TestUser) =>
+  const rate = (as: TestUser, rating: number) =>
     request(app.getHttpServer())
-      .post(`/meals/${mealId}/cooked`)
+      .patch(`/meals/${mealId}/state`)
       .set(...bearer(as))
-      .expect(201);
+      .send({ rating })
+      .expect(200);
 
   it('crée la recette au nom de l’application, pas de l’admin', async () => {
     const meal = await detail(admin);
@@ -87,59 +85,36 @@ describe('État par utilisateur (e2e)', () => {
   // pousserait son propre user_id, et la recette changerait de propriétaire
   // selon qui la lit.
   it('ne fait pas dépendre le propriétaire de la recette du lecteur', async () => {
-    await cook(alice);
+    await rate(alice, 4);
 
     expect(await detail(alice)).toMatchObject({ userId: null });
     expect((await list(alice)).items[0]).toMatchObject({ userId: null });
   });
 
-  it('n’attribue la cuisson qu’au compte qui l’a faite', async () => {
-    await cook(alice);
-
-    expect(await detail(alice)).toMatchObject({ timesCooked: 1 });
-    expect((await detail(alice)).lastCookedAt).not.toBeNull();
-    expect(await detail(bob)).toMatchObject({
-      timesCooked: 0,
-      lastCookedAt: null,
-    });
-  });
-
-  // L'incrément est en SQL dans le ON CONFLICT : un read-modify-write perdrait
-  // une cuisson sur deux appels concurrents.
-  it('cumule les cuissons d’un même compte', async () => {
-    await cook(alice);
-    await cook(alice);
-
-    expect(await detail(alice)).toMatchObject({ timesCooked: 2 });
-  });
-
-  it('garde favori et note propres au compte', async () => {
+  it('garde la note propre au compte', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true, rating: 5 })
+      .send({ rating: 5 })
       .expect(200);
 
-    expect(await detail(alice)).toMatchObject({ isFavorite: true, rating: 5 });
-    expect(await detail(bob)).toMatchObject({
-      isFavorite: false,
-      rating: null,
-    });
+    expect(await detail(alice)).toMatchObject({ rating: 5 });
+    expect(await detail(bob)).toMatchObject({ rating: null });
   });
 
   it('ne réserve pas /state à l’admin', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true })
+      .send({ rating: 3 })
       .expect(200);
   });
 
-  it('efface la note sans toucher au favori', async () => {
+  it('efface la note avec null', async () => {
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: true, rating: 4 })
+      .send({ rating: 4 })
       .expect(200);
     await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
@@ -147,46 +122,35 @@ describe('État par utilisateur (e2e)', () => {
       .send({ rating: null })
       .expect(200);
 
-    expect(await detail(alice)).toMatchObject({
-      isFavorite: true,
-      rating: null,
-    });
-  });
-
-  // Le filtre porte sur l'état du demandeur : sans le NOT EXISTS, favorite=false
-  // ne rendrait que les repas déjà notés par le compte.
-  it('filtre les favoris par compte', async () => {
-    await request(app.getHttpServer())
-      .patch(`/meals/${mealId}/state`)
-      .set(...bearer(alice))
-      .send({ isFavorite: true })
-      .expect(200);
-
-    expect((await list(alice, '?favorite=true')).items).toHaveLength(1);
-    expect((await list(alice, '?favorite=false')).items).toHaveLength(0);
-    expect((await list(bob, '?favorite=true')).items).toHaveLength(0);
-    expect((await list(bob, '?favorite=false')).items).toHaveLength(1);
+    expect(await detail(alice)).toMatchObject({ rating: null });
   });
 
   it('rend la liste avec l’état du demandeur', async () => {
-    await cook(alice);
+    await rate(alice, 4);
 
-    expect((await list(alice)).items[0]).toMatchObject({ timesCooked: 1 });
-    expect((await list(bob)).items[0]).toMatchObject({ timesCooked: 0 });
+    expect((await list(alice)).items[0]).toMatchObject({ rating: 4 });
+    expect((await list(bob)).items[0]).toMatchObject({ rating: null });
   });
 
-  it('refuse un favori null', async () => {
-    await request(app.getHttpServer())
+  it('refuse un favori, champ et filtre retirés du contrat', async () => {
+    const patch = await request(app.getHttpServer())
       .patch(`/meals/${mealId}/state`)
       .set(...bearer(alice))
-      .send({ isFavorite: null })
+      .send({ isFavorite: true })
       .expect(400);
+    expect(JSON.stringify(patch.body)).toContain('isFavorite');
+
+    const filter = await request(app.getHttpServer())
+      .get('/meals?favorite=true')
+      .set(...bearer(alice))
+      .expect(400);
+    expect(JSON.stringify(filter.body)).toContain('favorite');
   });
 
   // Seul test qui échoue si `ensureForUser` cesse de réinjecter dans les slots
   // les repas que `attachFor` lui rend.
   it('rend l’état du demandeur dans les créneaux du plan', async () => {
-    await cook(alice);
+    await rate(alice, 4);
     await request(app.getHttpServer())
       .post('/plan/generate')
       .set(...bearer(alice))
@@ -199,13 +163,23 @@ describe('État par utilisateur (e2e)', () => {
     const slot = (plan.body.slots as { meal: MealBody | null }[]).find(
       (s) => s.meal,
     );
-    expect(slot?.meal).toMatchObject({ id: mealId, timesCooked: 1 });
+    expect(slot?.meal).toMatchObject({ id: mealId, rating: 4 });
   });
 
-  it('rend 404 sur la cuisson d’un repas inexistant', async () => {
+  it('rend 404 sur la note d’un repas inexistant', async () => {
     await request(app.getHttpServer())
-      .post('/meals/00000000-0000-4000-8000-000000000000/cooked')
+      .patch('/meals/00000000-0000-4000-8000-000000000000/state')
+      .set(...bearer(alice))
+      .send({ rating: 3 })
+      .expect(404);
+  });
+
+  it('a retiré le suivi des cuissons du contrat', async () => {
+    await request(app.getHttpServer())
+      .post(`/meals/${mealId}/cooked`)
       .set(...bearer(alice))
       .expect(404);
+    expect(await detail(alice)).not.toHaveProperty('timesCooked');
+    expect(await detail(alice)).not.toHaveProperty('lastCookedAt');
   });
 });

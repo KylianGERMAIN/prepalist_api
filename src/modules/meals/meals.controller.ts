@@ -26,6 +26,7 @@ import { CreateMealDto } from './dto/create-meal.dto';
 import { MealQueryDto } from './dto/meal-query.dto';
 import { MealDto } from './dto/meal.dto';
 import { PaginatedMealsDto } from './dto/paginated-meals.dto';
+import { TagCountDto } from './dto/tag-count.dto';
 import { UpdateMealStateDto } from './dto/update-meal-state.dto';
 import { UpdateMealDto } from './dto/update-meal.dto';
 import { MealsService } from './meals.service';
@@ -38,11 +39,19 @@ export class MealsController {
 
   @Get()
   @ApiOperation({
-    summary: 'Liste paginée du catalogue de repas (filtres favorite/tag/name)',
+    summary:
+      'Liste paginée du catalogue de repas (filtres tag/name/incomplete)',
   })
   @ApiOkResponse({ type: PaginatedMealsDto })
   findAll(@CurrentUser('id') userId: string, @Query() query: MealQueryDto) {
     return this.meals.findAll(userId, query);
+  }
+
+  @Get('tags')
+  @ApiOperation({ summary: 'Tags existants, les plus utilisés en tête' })
+  @ApiOkResponse({ type: [TagCountDto] })
+  tags() {
+    return this.meals.tags();
   }
 
   @Post()
@@ -86,7 +95,7 @@ export class MealsController {
 
   @Patch(':id/state')
   @ApiOperation({
-    summary: 'Favori et note du repas pour le compte appelant',
+    summary: 'Note du repas pour le compte appelant',
   })
   @ApiOkResponse({ type: MealDto })
   updateState(
@@ -95,17 +104,5 @@ export class MealsController {
     @Body() dto: UpdateMealStateDto,
   ) {
     return this.meals.updateState(userId, id, dto);
-  }
-
-  @Post(':id/cooked')
-  @ApiOperation({
-    summary: 'Marque un repas comme cuisiné par le compte appelant',
-  })
-  @ApiCreatedResponse({ type: MealDto })
-  markCooked(
-    @CurrentUser('id') userId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ) {
-    return this.meals.markCooked(userId, id);
   }
 }

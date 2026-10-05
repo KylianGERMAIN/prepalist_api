@@ -5,6 +5,46 @@ Toutes les évolutions notables de l'API PrepaList sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 et le projet respecte le [Semantic Versioning](https://semver.org/lang/fr/).
 
+## [0.6.0] - 2026-10-05
+
+### À lire avant de déployer
+
+- **Ordre : l'API d'abord, le front v0.6.0 juste après.** Le front v0.5.0 envoie des champs que cette API refuse (favori, cuisson), et le front v0.6.0 lit des champs que l'API v0.5.0 n'a pas. Aucun ordre n'est sans casse : la fenêtre entre les deux tags doit rester courte.
+- **Rollback.** Redéployer v0.5.0 ne suffit pas : neuf migrations changent le schéma, dont deux qui retirent des colonnes. Prendre une branche Neon juste avant le déploiement, et la restaurer en cas de retour arrière.
+- **Après le déploiement de l'API**, lancer `deploy/sql/assign-aisles.sql` en `psql` pour ranger les ingrédients existants par rayon. Le script se termine par `COMMIT` : le relire avant.
+- **Nouvelles variables, toutes facultatives** : `ADMIN_EMAILS`, `SENTRY_DSN`.
+
+### Ajouté
+
+- **Rayons** : chaque ingrédient porte un rayon, et la liste de courses est groupée par rayon dans un ordre exposé par l'API.
+- **Description libre** sur les repas.
+- **Tags** : liste des tags existants, et normalisation (minuscules, espaces) à l'écriture et sur les tags déjà en base.
+- **Repas incomplets** : nombre d'ingrédients exposé, et repas sans ingrédient signalés.
+- **Planning** :
+  - affecter un repas aussi au créneau suivant (`alsoNext`) ;
+  - marquer un créneau « dehors », qui ne compte plus dans la liste de courses ;
+  - déplacer ou échanger un repas entre deux créneaux, atomiquement.
+- **Liste de courses** : suppression groupée et vidage de la liste.
+- **Unité par défaut des ingrédients**, remplie à partir des recettes existantes puis tenue à jour à chaque recette enregistrée.
+- **`ADMIN_EMAILS`** : les comptes listés sont promus ADMIN au démarrage.
+
+### Modifié
+
+- **Liste de courses réconciliée à chaque changement du planning**, dans la même transaction, en gardant les coches. Un article issu des plats supprimé à la main ne revient que par « Restaurer » (`POST /plan/shopping-list/sync`).
+- **Jeu d'unités fermé** (cassant) : une unité hors de la liste rend 400. `Unité` et `u` existants sont convertis en `pièce`.
+
+### Supprimé
+
+- **Favoris** (cassant) : `isFavorite` et le filtre `favorite` rendent 400, la colonne est supprimée.
+- **Suivi « cuisiné »** (cassant) : `POST /meals/:id/cooked` rend 404, `timesCooked` et `lastCookedAt` disparaissent, la génération ne tient plus compte de la fraîcheur.
+
+### Interne
+
+- **Observabilité** : logs JSON par requête (pino), `x-request-id` accepté seulement s'il est un UUID, Sentry pour les 5xx.
+- **CI** : contrôle de dérive du schéma, seuil de couverture, contrat OpenAPI versionné dans le dépôt, contrôle du titre de PR.
+- **Documentation d'architecture** : modèle de données, diagrammes de séquence, ADR, glossaire.
+- **e2e** : un seul serveur en écoute par suite, au lieu d'un serveur par requête.
+
 ## [0.5.0] - 2026-09-15
 
 ### Corrigé

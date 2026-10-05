@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import { Aisle } from '../../../common/aisle';
+import { Unit } from '../../../common/unit';
 
 export class CreateIngredientDto {
   @ApiProperty()
@@ -8,9 +16,13 @@ export class CreateIngredientDto {
   @MaxLength(120)
   name!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ enum: Unit, required: false, nullable: true })
   @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  defaultUnit?: string;
+  @IsEnum(Unit)
+  defaultUnit?: Unit;
+
+  @ApiProperty({ enum: Aisle, required: false, nullable: true })
+  @IsOptional()
+  @IsEnum(Aisle)
+  aisle?: Aisle;
 }

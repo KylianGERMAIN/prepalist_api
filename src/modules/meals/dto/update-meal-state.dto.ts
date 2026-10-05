@@ -1,19 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsBoolean,
-  IsInt,
-  IsOptional,
-  Max,
-  Min,
-  ValidateIf,
-} from 'class-validator';
+import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class UpdateMealStateDto {
-  @ApiProperty({ required: false })
-  @ValidateIf((_, value) => value !== undefined)
-  @IsBoolean()
-  isFavorite?: boolean;
-
   // `type: Number` explicite : sur une union `number | null` le reflect
   // metadata rend Object, et le client généré tombe sur un type inutilisable.
   @ApiProperty({

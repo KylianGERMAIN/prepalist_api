@@ -1,5 +1,13 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { Unit } from '../../common/unit';
+import { reconcilePlans } from '../shopping-list/derived-items';
 import { MealsService } from './meals.service';
+
+jest.mock('../shopping-list/derived-items', () => ({
+  lockPlan: jest.fn(),
+  planIdsUsingMeal: jest.fn().mockResolvedValue(['p1']),
+  reconcilePlans: jest.fn(),
+}));
 
 describe('MealsService', () => {
   let service: MealsService;
@@ -10,13 +18,36 @@ describe('MealsService', () => {
     remove: jest.Mock;
     update: jest.Mock;
     createQueryBuilder: jest.Mock;
+    manager: { transaction: jest.Mock };
   };
   let mealIngredients: { create: jest.Mock };
-  let ingredients: { find: jest.Mock };
+  let ingredients: { find: jest.Mock; update: jest.Mock };
   let state: {
     attachFor: jest.Mock;
-    markCooked: jest.Mock;
     patch: jest.Mock;
+  };
+
+  // `findOne` passe par un query builder (pour `addSelect` de la description) :
+  // ce faux le ramène au mock `meals.findOne`, que les tests paramètrent.
+  interface DetailQb {
+    params: object;
+    addSelect: jest.Mock;
+    leftJoinAndSelect: jest.Mock;
+    where: jest.Mock;
+    getOne: jest.Mock;
+  }
+  const detailQb = (): DetailQb => {
+    const qb: DetailQb = {
+      params: {},
+      addSelect: jest.fn(() => qb),
+      leftJoinAndSelect: jest.fn(() => qb),
+      where: jest.fn((_: string, params: object) => {
+        qb.params = params;
+        return qb;
+      }),
+      getOne: jest.fn(() => meals.findOne({ where: qb.params }) as unknown),
+    };
+    return qb;
   };
 
   beforeEach(() => {
@@ -26,13 +57,21 @@ describe('MealsService', () => {
       findOne: jest.fn(),
       remove: jest.fn(() => Promise.resolve()),
       update: jest.fn(() => Promise.resolve()),
-      createQueryBuilder: jest.fn(),
+      createQueryBuilder: jest.fn(detailQb),
+      manager: {
+        transaction: jest.fn(async (cb: (m: unknown) => unknown) =>
+          cb({
+            save: (x: object) => meals.save(x),
+            remove: (x: object) => meals.remove(x),
+          }),
+        ),
+      },
     };
+    jest.mocked(reconcilePlans).mockClear();
     mealIngredients = { create: jest.fn((x: unknown) => x) };
-    ingredients = { find: jest.fn() };
+    ingredients = { find: jest.fn(), update: jest.fn() };
     state = {
       attachFor: jest.fn((_: unknown, meals: unknown) => meals),
-      markCooked: jest.fn(),
       patch: jest.fn(),
     };
     service = new MealsService(
@@ -57,8 +96,8 @@ describe('MealsService', () => {
     const meal = await service.create('u1', {
       name: 'Curry',
       ingredients: [
-        { ingredientId: 'i1', quantity: 1, unit: 'g' },
-        { ingredientId: 'i2', quantity: 2, unit: 'g' },
+        { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+        { ingredientId: 'i2', quantity: 2, unit: Unit.GRAM },
       ],
     });
     expect(meals.save).toHaveBeenCalled();
@@ -85,21 +124,25 @@ describe('MealsService', () => {
       service.create('u1', {
         name: 'Curry',
         ingredients: [
-          { ingredientId: 'i1', quantity: 1, unit: 'g' },
-          { ingredientId: 'i2', quantity: 2, unit: 'g' },
+          { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+          { ingredientId: 'i2', quantity: 2, unit: Unit.GRAM },
         ],
       }),
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('findOne loads the ingredient lines and their ingredient', async () => {
+  it('findOne loads the ingredient lines, their ingredient and the description', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
+    const qb = detailQb();
+    meals.createQueryBuilder.mockReturnValue(qb);
     await service.findOne('m1');
-    expect(meals.findOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        relations: { ingredients: { ingredient: true } },
-      }),
+    expect(qb.addSelect).toHaveBeenCalledWith('meal.description');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith('meal.ingredients', 'mi');
+    expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+      'mi.ingredient',
+      'ingredient',
     );
+    expect(qb.params).toEqual({ id: 'm1' });
   });
 
   it('findOne throws when the meal is missing', async () => {
@@ -113,27 +156,16 @@ describe('MealsService', () => {
     expect(state.attachFor).toHaveBeenCalledWith('u1', [{ id: 'm1' }]);
   });
 
-  it('markCooked writes to the caller state, not to the meal', async () => {
+  it('updateState forwards the rating to the caller state', async () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
-    await service.markCooked('u1', 'm1');
-    expect(state.markCooked).toHaveBeenCalledWith('u1', 'm1');
-    expect(meals.update).not.toHaveBeenCalled();
-    expect(meals.save).not.toHaveBeenCalled();
-  });
-
-  it('updateState forwards favorite and rating to the caller state', async () => {
-    meals.findOne.mockResolvedValue({ id: 'm1' });
-    await service.updateState('u1', 'm1', { isFavorite: true, rating: 5 });
-    expect(state.patch).toHaveBeenCalledWith('u1', 'm1', {
-      isFavorite: true,
-      rating: 5,
-    });
+    await service.updateState('u1', 'm1', { rating: 5 });
+    expect(state.patch).toHaveBeenCalledWith('u1', 'm1', { rating: 5 });
   });
 
   it('updateState throws when the meal is missing', async () => {
     meals.findOne.mockResolvedValue(null);
     await expect(
-      service.updateState('u1', 'm1', { isFavorite: true }),
+      service.updateState('u1', 'm1', { rating: 4 }),
     ).rejects.toThrow(NotFoundException);
     expect(state.patch).not.toHaveBeenCalled();
   });
@@ -142,6 +174,7 @@ describe('MealsService', () => {
     meals.findOne.mockResolvedValue({ id: 'm1' });
     await service.remove('m1');
     expect(meals.remove).toHaveBeenCalled();
+    expect(reconcilePlans).toHaveBeenCalledWith(expect.anything(), ['p1']);
   });
 
   it('update replaces ingredients when the list is provided', async () => {
@@ -153,11 +186,12 @@ describe('MealsService', () => {
     ingredients.find.mockResolvedValue([{ id: 'i1' }]);
     await service.update('u1', 'm1', {
       name: 'new',
-      ingredients: [{ ingredientId: 'i1', quantity: 1, unit: 'g' }],
+      ingredients: [{ ingredientId: 'i1', quantity: 1, unit: Unit.GRAM }],
     });
     const saved = meals.save.mock.calls[0][0];
     expect(saved.name).toBe('new');
     expect(saved.ingredients).toHaveLength(1);
+    expect(reconcilePlans).toHaveBeenCalledWith(expect.anything(), ['p1']);
   });
 
   it('update leaves ingredients untouched when omitted', async () => {
@@ -169,6 +203,7 @@ describe('MealsService', () => {
     const saved = meals.save.mock.calls[0][0];
     expect(saved.ingredients).toEqual([{ id: 'old' }]);
     expect(saved.name).toBe('new');
+    expect(reconcilePlans).not.toHaveBeenCalled();
   });
 
   it('update rejects a duplicated ingredient', async () => {
@@ -176,8 +211,8 @@ describe('MealsService', () => {
     await expect(
       service.update('u1', 'm1', {
         ingredients: [
-          { ingredientId: 'i1', quantity: 1, unit: 'g' },
-          { ingredientId: 'i1', quantity: 2, unit: 'g' },
+          { ingredientId: 'i1', quantity: 1, unit: Unit.GRAM },
+          { ingredientId: 'i1', quantity: 2, unit: Unit.GRAM },
         ],
       }),
     ).rejects.toThrow(BadRequestException);
@@ -196,32 +231,9 @@ describe('MealsService', () => {
       page: 1,
       limit: 20,
       skip: 0,
-      favorite: true,
       name: 'x',
       tag: 't',
     } as never);
-    expect(qb.andWhere).toHaveBeenCalledTimes(3);
-  });
-
-  // L'absence de ligne d'état vaut « non favori » : sans le NOT EXISTS, le
-  // filtre ne rendrait que les repas déjà notés par le compte.
-  it('findAll turns favorite=false into a NOT EXISTS on the caller state', async () => {
-    const qb = {
-      andWhere: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      skip: jest.fn().mockReturnThis(),
-      take: jest.fn().mockReturnThis(),
-      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
-    };
-    meals.createQueryBuilder.mockReturnValue(qb);
-    await service.findAll('u1', {
-      page: 1,
-      limit: 20,
-      skip: 0,
-      favorite: false,
-    } as never);
-    const [sql, params] = qb.andWhere.mock.calls[0];
-    expect(sql).toMatch(/^NOT EXISTS/);
-    expect(params).toEqual({ userId: 'u1' });
+    expect(qb.andWhere).toHaveBeenCalledTimes(2);
   });
 });
